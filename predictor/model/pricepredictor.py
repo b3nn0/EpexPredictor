@@ -2,6 +2,7 @@
 
 import math
 from typing import Dict, List, Tuple, cast
+from enum import Enum
 import urllib.request
 from open_meteo_solar_forecast import OpenMeteoSolarForecast
 import pandas as pd
@@ -21,26 +22,63 @@ from sklearn.neighbors import KNeighborsRegressor
 
 log = logging.getLogger(__name__)
 
+class Country(str, Enum):
+    DE = 'DE'
+    AT = 'AT'
+
+class CountryConfig:
+    COUNTRY_CODE : str
+    LATITUDES : [float]
+    LONGITUDES : [float]
+
+    def __init__ (self, COUNTRY_CODE, LATITUDES, LONGITUDES):
+        self.COUNTRY_CODE = COUNTRY_CODE
+        self.LATITUDES = LATITUDES
+        self.LONGITUDES = LONGITUDES
+
 # We sample these coordinates for solar/wind/temperature
-LATITUDES = [
-    48.4,
-    49.7,
-    51.3,
-    52.8,
-    53.8,
-    54.1
-]
-LONGITUDES = [
-    9.3,
-    11.3,
-    8.6,
-    12.0,
-    8.1,
-    11.6
-]
+COUNTRY_CONFIG = {
+        Country.DE:  CountryConfig(
+                COUNTRY_CODE = 'DE',
+                LATITUDES =  [
+                    48.4,
+                    49.7,
+                    51.3,
+                    52.8,
+                    53.8,
+                    54.1
+                ],
+                LONGITUDES = [
+                    9.3,
+                    11.3,
+                    8.6,
+                    12.0,
+                    8.1,
+                    11.6
+                ]
+               ),
+        Country.AT : CountryConfig(
+                COUNTRY_CODE = 'AT',
+                LATITUDES = [
+                    48.36,
+                    48.27,
+                    47.32,
+                    47.00,
+                    47.11
+                ],
+                LONGITUDES = [
+                    16.31,
+                    13.85,
+                    10.82,
+                    13.54,
+                    15.80
+                ],
+               ),
+        }
 
 
 class PricePredictor:
+    config : CountryConfig
     weather : pd.DataFrame | None = None
     solar : pd.DataFrame | None = None
     prices: pd.DataFrame | None = None
@@ -53,7 +91,8 @@ class PricePredictor:
 
     predictor : KNeighborsRegressor | None = None
 
-    def __init__(self, testdata : bool = False, learnDays=90, forecastDays=7):
+    def __init__(self, country: Country = Country.DE, testdata : bool = False, learnDays=90, forecastDays=7):
+        self.config = COUNTRY_CONFIG[country]
         self.testdata = testdata
         self.learnDays = learnDays
         self.forecastDays = forecastDays
@@ -179,11 +218,10 @@ class PricePredictor:
 
         # TODO: in theory, OpenMeteoSolarForecast can handle it if we give it multiple locations, but strange things seem to happen then..
         # Since it does its http requests seperately anyway, we can just loop ourself...
-
         frames = []
-        for i in range(len(LATITUDES)):
-            lat = LATITUDES[i]
-            lon = LONGITUDES[i]
+        for i in range(len(self.config.LATITUDES)):
+            lat = self.config.LATITUDES[i]
+            lon = self.config.LONGITUDES[i]
 
             async with OpenMeteoSolarForecast(azimuth=0, declination=0, dc_kwp=1, latitude=lat, longitude=lon, past_days=self.learnDays, forecast_days=self.forecastDays) as forecast:
                 estimate = await forecast.estimate()
@@ -214,8 +252,8 @@ class PricePredictor:
             weather.index.set_names("time", inplace=True)
             return weather
 
-        lats = ",".join(map(str, LATITUDES))
-        lons = ",".join(map(str, LONGITUDES))
+        lats = ",".join(map(str, self.config.LATITUDES))
+        lons = ",".join(map(str, self.config.LONGITUDES))
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lats}&longitude={lons}&past_days={self.learnDays}&forecast_days={self.forecastDays}&hourly=wind_speed_80m,temperature_2m&timezone=UTC"
 
         async with aiohttp.ClientSession() as session:
@@ -254,8 +292,8 @@ class PricePredictor:
             prices.index.set_names("time", inplace=True)
             return prices
 
-        filter = 4169 # marktpreis DE/LU
-        region = "DE"
+        filter = 4169 # marktpreis
+        region = self.config.COUNTRY_CODE 
         filterCopy = filter
         regionCopy = region
         resolution = "hour"
