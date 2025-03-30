@@ -332,9 +332,12 @@ async def main():
     actuals = map(lambda p: str(round(p/10, 1)), actual.values())
     preds = map(lambda p: str(round(p/10, 1)), predicted.values())
 
-    x = list(x)[0:14*24]
-    actuals = list(actuals)[0:14*24]
-    preds = list(preds)[0:14*24]
+    start = 1500
+    end = start+14*24
+
+    x = list(x)[start:end]
+    actuals = list(actuals)[start:end]
+    preds = list(preds)[start:end]
 
     print (
         f"""
