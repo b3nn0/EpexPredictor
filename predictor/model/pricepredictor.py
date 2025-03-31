@@ -28,8 +28,8 @@ class Country(str, Enum):
 
 class CountryConfig:
     COUNTRY_CODE : str
-    LATITUDES : [float]
-    LONGITUDES : [float]
+    LATITUDES : list[float]
+    LONGITUDES : list[float]
 
     def __init__ (self, COUNTRY_CODE, LATITUDES, LONGITUDES):
         self.COUNTRY_CODE = COUNTRY_CODE
@@ -208,10 +208,11 @@ class PricePredictor:
         
 
     async def fetch_solar(self) -> pd.DataFrame | None:
-        if self.testdata and os.path.exists("solar.json"):
+        cacheFn = f"solar_{self.config.COUNTRY_CODE}.json"
+        if self.testdata and os.path.exists(cacheFn):
             log.warning("Loading solar from persistent cache!")
             await asyncio.sleep(1) # simulate async http
-            solar = pd.read_json("solar.json")
+            solar = pd.read_json(cacheFn)
             solar.index = solar.index.tz_localize("UTC") # type: ignore
             solar.index.set_names("time", inplace=True)
             return solar
@@ -238,16 +239,17 @@ class PricePredictor:
         df.set_index("time", inplace=True)
        
         if self.testdata:
-            df.to_json("solar.json")
+            df.to_json(cacheFn)
 
         assert isinstance(df, pd.DataFrame)
         return df
     
     async def fetch_weather(self) -> pd.DataFrame | None:
-        if self.testdata and os.path.exists("weather.json"):
+        cacheFn = f"weather_{self.config.COUNTRY_CODE}.json"
+        if self.testdata and os.path.exists(cacheFn):
             log.warning("Loading weather from persistent cache!")
             await asyncio.sleep(1) # simulate async http
-            weather = pd.read_json("weather.json")
+            weather = pd.read_json(cacheFn)
             weather.index = weather.index.tz_localize("UTC") # type: ignore
             weather.index.set_names("time", inplace=True)
             return weather
@@ -279,15 +281,17 @@ class PricePredictor:
                 df.set_index("time", inplace=True)
 
                 if self.testdata:
-                    df.to_json("weather.json")
+                    df.to_json(cacheFn)
                 
                 return df
 
     async def fetch_prices(self) -> pd.DataFrame | None:
-        if self.testdata and os.path.exists("prices.json"):
+        cacheFn = f"prices_{self.config.COUNTRY_CODE}.json"
+
+        if self.testdata and os.path.exists(cacheFn):
             log.warning("Loading prices from persistent cache!")
             await asyncio.sleep(1) # simulate async http
-            prices = pd.read_json("prices.json")
+            prices = pd.read_json(cacheFn)
             prices.index = prices.index.tz_localize("UTC") # type: ignore
             prices.index.set_names("time", inplace=True)
             return prices
@@ -337,7 +341,7 @@ class PricePredictor:
             data.set_index("time", inplace=True)
 
             if self.testdata:
-                data.to_json("prices.json")
+                data.to_json(cacheFn)
 
             return data
 
