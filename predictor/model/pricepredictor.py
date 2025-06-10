@@ -25,11 +25,13 @@ class Country(str, Enum):
 
 class CountryConfig:
     COUNTRY_CODE : str
+    FILTER : str
     LATITUDES : list[float]
     LONGITUDES : list[float]
 
-    def __init__ (self, COUNTRY_CODE, LATITUDES, LONGITUDES):
+    def __init__ (self, COUNTRY_CODE, FILTER, LATITUDES, LONGITUDES):
         self.COUNTRY_CODE = COUNTRY_CODE
+        self.FILTER = FILTER
         self.LATITUDES = LATITUDES
         self.LONGITUDES = LONGITUDES
 
@@ -37,6 +39,7 @@ class CountryConfig:
 COUNTRY_CONFIG = {
         Country.DE:  CountryConfig(
                 COUNTRY_CODE = 'DE',
+                FILTER = '4169',
                 LATITUDES =  [
                     48.4,
                     49.7,
@@ -56,6 +59,7 @@ COUNTRY_CONFIG = {
                ),
         Country.AT : CountryConfig(
                 COUNTRY_CODE = 'AT',
+                FILTER = '4170',
                 LATITUDES = [
                     48.36,
                     48.27,
@@ -277,7 +281,7 @@ class PricePredictor:
             prices.index.set_names("time", inplace=True)
             return prices
 
-        filter = 4169 # marktpreis
+        filter = self.config.FILTER # marktpreis
         region = self.config.COUNTRY_CODE 
         filterCopy = filter
         regionCopy = region
