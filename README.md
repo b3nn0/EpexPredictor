@@ -89,6 +89,10 @@ I might stop or block this service at any time. Fair use is expected!
 At some point, I might create a HA addon to run everything locally.
 For now, you have to either use my server, or run it yourself.
 
+Note: Home Assistant only supports a limited amount of data in state attributes. Therefore, this graph will be limited to 72 hours.
+If you need more, you will have to be more creative.
+Personally, I provide the data as a HA "service" (now "action") using pyscript, and then call this service to work with the data.
+
 
 
 ### Configuration:
@@ -96,7 +100,7 @@ For now, you have to either use my server, or run it yourself.
 # Make sure you change the parameters fixedPrice and taxPercent according to your electricity plan
 sensor:
   - platform: rest
-    resource: "https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19"
+    resource: "https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19&hours=72"
     method: GET
     unique_id: epex_price_prediction
     name: "EPEX Price Prediction"
@@ -110,7 +114,7 @@ sensor:
   # and plot it in the same diagram as the actual prediction sensor
 
   #- platform: rest
-  #  resource: "https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19&#evaluation=true"
+  #  resource: "https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19&#evaluation=true&hours=72"
   #  method: GET
   #  unique_id: epex_price_prediction_evaluation
   #  scan_interval: 3600
