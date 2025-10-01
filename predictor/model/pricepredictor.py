@@ -181,6 +181,10 @@ class PricePredictor:
         return result
 
 
+    def is_timestamp(self, tz : pytz.timezone, t : datetime.datetime, h : int, m : int) -> int:
+        local = t.astimezone(tz)
+        return 1 if local.hour == h and local.minute == m else 0
+
     async def prepare_dataframe(self) -> pd.DataFrame | None:
         if self.weather is None:
             await self.refresh_forecasts()
@@ -202,8 +206,10 @@ class PricePredictor:
         for i in range(6):
             df[f"day_{i}"] = df["time"].apply(lambda t: 1 if t.astimezone(tzlocal).weekday() == i else 0)
         #df["saturday"] = df["time"].apply(lambda t: 1 if t.weekday() == 5 else 0)
+        # TODO: could probably be done a lot more efficiently than this loop
         for h in range(0, 24):
-            df[f"h_{h}"] = df["time"].apply(lambda t: 1 if t.astimezone(tzlocal).hour == h else 0)
+            for m in range(0, 60, 15):
+                df[f"i_{h}_{m}"] = df["time"].apply(lambda t: self.is_timestamp(tzlocal, t, h, m))
         
         df.set_index("time", inplace=True)
         return df
@@ -239,7 +245,7 @@ class PricePredictor:
 
         lats = ",".join(map(str, self.config.LATITUDES))
         lons = ",".join(map(str, self.config.LONGITUDES))
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lats}&longitude={lons}&azimuth=0&tilt=0&past_days={self.learnDays}&forecast_days={self.forecastDays}&hourly=wind_speed_80m,temperature_2m,global_tilted_irradiance&timezone=UTC"
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lats}&longitude={lons}&azimuth=0&tilt=0&past_days={self.learnDays}&forecast_days={self.forecastDays}&minutely_15=wind_speed_80m,temperature_2m,global_tilted_irradiance&timezone=UTC"
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
@@ -249,10 +255,10 @@ class PricePredictor:
                 frames = []
                 for i, fc in enumerate(data):
                     df = pd.DataFrame(columns=["time", f"wind_{i}", f"temp_{i}"]) # type: ignore
-                    times = fc["hourly"]["time"]
-                    winds = fc["hourly"]["wind_speed_80m"]
-                    temps = fc["hourly"]["temperature_2m"]
-                    irradiance = fc["hourly"]["global_tilted_irradiance"]
+                    times = fc["minutely_15"]["time"]
+                    winds = fc["minutely_15"]["wind_speed_80m"]
+                    temps = fc["minutely_15"]["temperature_2m"]
+                    irradiance = fc["minutely_15"]["global_tilted_irradiance"]
                     df["time"] = times
                     df[f"irradiance_{i}"] = irradiance
                     df[f"wind_{i}"] = winds
@@ -285,7 +291,7 @@ class PricePredictor:
         region = self.config.COUNTRY_CODE 
         filterCopy = filter
         regionCopy = region
-        resolution = "hour"
+        resolution = "quarterhour"
 
         # Get available timestamps
         url = f"https://www.smard.de/app/chart_data/{filter}/{region}/index_{resolution}.json"
