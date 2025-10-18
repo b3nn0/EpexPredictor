@@ -4,6 +4,7 @@ import os
 import asyncio
 from typing import Dict
 from enum import Enum
+import bisect
 
 from pydantic import BaseModel
 import pytz
@@ -113,11 +114,11 @@ class CountryPrices:
 
         prices : list[PriceModel] = []
         
-        for dt in sorted(prediction.keys()):
-            if dt + datetime.timedelta(minutes=15) < startTs:
-                continue
-            if dt > endTs:
-                continue
+        dts = list(sorted(prediction.keys()))
+        startindex = max(0, bisect.bisect_right(dts, startTs) - 1)
+        endindex = min(len(dts)-1, bisect.bisect_right(dts, endTs))
+
+        for dt in dts[startindex:endindex]:
             price = prediction[dt]
             total = (price + fixedPrice) * (1 + taxPercent / 100.0)
             total = unit.convert(total)
