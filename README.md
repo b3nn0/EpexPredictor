@@ -114,10 +114,9 @@ sensor:
   # and plot it in the same diagram as the actual prediction sensor
 
   #- platform: rest
-  #  resource: "https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19&#evaluation=true&hours=72"
+  #  resource: "https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19&evaluation=true&hours=72"
   #  method: GET
   #  unique_id: epex_price_prediction_evaluation
-  #  scan_interval: 3600
   #  name: "EPEX Price Prediction Evaluation"
   #  unit_of_measurement: ct/kWh
   #  value_template: "{{ value_json.prices[0].total }}"
