@@ -4,7 +4,8 @@ import math
 from typing import Dict, List, Tuple, cast
 from enum import Enum
 import pandas as pd
-import datetime
+from datetime import datetime, tzinfo
+import pytz
 import aiohttp
 import json
 import logging
@@ -12,7 +13,6 @@ import os
 import asyncio
 import holidays
 import time
-import pytz
 
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
@@ -29,17 +29,19 @@ class CountryConfig:
     LATITUDES : list[float]
     LONGITUDES : list[float]
 
-    def __init__ (self, COUNTRY_CODE, FILTER, LATITUDES, LONGITUDES):
+    def __init__ (self, COUNTRY_CODE, FILTER, TIMEZONE, LATITUDES, LONGITUDES):
         self.COUNTRY_CODE = COUNTRY_CODE
         self.FILTER = FILTER
+        self.TIMEZONE = TIMEZONE
         self.LATITUDES = LATITUDES
         self.LONGITUDES = LONGITUDES
 
 # We sample these coordinates for solar/wind/temperature
 COUNTRY_CONFIG = {
         Country.DE:  CountryConfig(
-                COUNTRY_CODE = 'DE',
-                FILTER = '4169',
+                COUNTRY_CODE = "DE",
+                FILTER = "4169",
+                TIMEZONE = "Europe/Berlin",
                 LATITUDES =  [
                     48.4,
                     49.7,
@@ -58,8 +60,9 @@ COUNTRY_CONFIG = {
                 ]
                ),
         Country.AT : CountryConfig(
-                COUNTRY_CODE = 'AT',
-                FILTER = '4170',
+                COUNTRY_CODE = "AT",
+                FILTER = "4170",
+                TIMEZONE = "Europe/Berlin",
                 LATITUDES = [
                     48.36,
                     48.27,
@@ -152,7 +155,7 @@ class PricePredictor:
 
         return predictionDf
 
-    async def predict(self, estimateAll : bool = False) -> Dict[datetime.datetime, float]:
+    async def predict(self, estimateAll : bool = False) -> Dict[datetime, float]:
         """
         if estimateAll is true, you will get an estimation for the full time range, even if the prices are known already (for performance evaluation).
         if false, you will get known data as is, and only estimations for unknown data
@@ -170,7 +173,7 @@ class PricePredictor:
       
         return predDict
 
-    def _to_price_dict(self, df : pd.DataFrame) -> Dict[datetime.datetime, float]:
+    def _to_price_dict(self, df : pd.DataFrame) -> Dict[datetime, float]:
         result = {}
         for time, row in df.iterrows():
             ts = cast(pd.Timestamp, time).to_pydatetime()
@@ -181,7 +184,7 @@ class PricePredictor:
         return result
 
 
-    def is_timestamp(self, tz : pytz.timezone, t : datetime.datetime, h : int, m : int) -> int:
+    def is_timestamp(self, tz : tzinfo, t : datetime, h : int, m : int) -> int:
         local = t.astimezone(tz)
         return 1 if local.hour == h and local.minute == m else 0
 
@@ -200,16 +203,22 @@ class PricePredictor:
         datacols.remove("price")
         df = df.dropna(subset=datacols).copy()
 
-        tzlocal = pytz.timezone("Europe/Berlin")
+        tzlocal = pytz.timezone(self.config.TIMEZONE)
         holis = holidays.country_holidays(self.config.COUNTRY_CODE)
         df["holiday"] = df["time"].apply(lambda t: 1 if t.astimezone(tzlocal).weekday() == 6 or t.astimezone(tzlocal).date() in holis else 0)
         for i in range(6):
             df[f"day_{i}"] = df["time"].apply(lambda t: 1 if t.astimezone(tzlocal).weekday() == i else 0)
         #df["saturday"] = df["time"].apply(lambda t: 1 if t.weekday() == 5 else 0)
-        # TODO: could probably be done a lot more efficiently than this loop
+
+        timecols : List[pd.Series|pd.DataFrame] = []
         for h in range(0, 24):
             for m in range(0, 60, 15):
-                df[f"i_{h}_{m}"] = df["time"].apply(lambda t: self.is_timestamp(tzlocal, t, h, m))
+                col = df["time"].apply(lambda t: self.is_timestamp(tzlocal, t, h, m))
+                col.name = f"i_{h}_{m}"
+                timecols.append(col)
+        timecols.insert(0, df)
+
+        df = pd.concat(timecols, axis=1)
         
         df.set_index("time", inplace=True)
         return df
@@ -254,7 +263,7 @@ class PricePredictor:
                 data = json.loads(data)
                 frames = []
                 for i, fc in enumerate(data):
-                    df = pd.DataFrame(columns=["time", f"wind_{i}", f"temp_{i}"]) # type: ignore
+                    df = pd.DataFrame(columns=["time", f"wind_{i}", f"temp_{i}"])
                     times = fc["minutely_15"]["time"]
                     winds = fc["minutely_15"]["wind_speed_80m"]
                     temps = fc["minutely_15"]["temperature_2m"]
@@ -322,11 +331,11 @@ class PricePredictor:
                         price = entry[1]
                         if price is None:
                             continue
-                        dt = datetime.datetime.fromtimestamp(entry[0] / 1000, tz=pytz.timezone("Europe/Berlin"))
+                        dt = datetime.fromtimestamp(entry[0] / 1000, tz=pytz.timezone("Europe/Berlin"))
                         dt = dt.astimezone(pytz.UTC)
                         pricesDict[dt] = price
             
-            data = pd.DataFrame.from_dict(pricesDict, orient="index", columns=["price"]).reset_index() # type: ignore
+            data = pd.DataFrame.from_dict(pricesDict, orient="index", columns=["price"]).reset_index()
             data.rename(columns={"index": "time"}, inplace=True)
             data["time"] = pd.to_datetime(data["time"], utc=True)
             data["price"] = data["price"] / 10
@@ -337,7 +346,7 @@ class PricePredictor:
 
             return data
 
-    def get_last_known_price(self) -> Tuple[datetime.datetime, float] | None:
+    def get_last_known_price(self) -> Tuple[datetime, float] | None:
         if self.prices is None:
             return None
         lastrow = self.prices.dropna().reset_index().iloc[-1]
@@ -360,13 +369,13 @@ async def main():
     actual = await pred.predict()
     predicted = await pred.predict(estimateAll=True)
 
-    #xdt : List[datetime.datetime] = list(actual.keys())
+    #xdt : List[datetime] = list(actual.keys())
     #x = map(str, range(0, len(actual)))
     actuals = map(lambda p: str(round(p, 1)), actual.values())
     preds = map(lambda p: str(round(p, 1)), predicted.values())
 
-    start = 100
-    end = start+14*24
+    start = 500
+    end = start+14*24*4
 
     #x = list(x)[start:end]
     actuals = list(actuals)[start:end]

@@ -16,7 +16,7 @@ Supported Countries:
 - Maybe package it directly as a Home Assistant Add-on
 
 ## The Model
-We sample a few sample points all over the country and fetch hourly [Weather data from Open-Meteo.com](https://open-meteo.com/) for those for the past n days (default n=90).
+We sample a few sample points all over the country and fetch hourly [Weather data from Open-Meteo.com](https://open-meteo.com/) for those for the past n days (default n=30).
 This serves as the main data source.
 
 

@@ -12,9 +12,10 @@ logging.basicConfig(
 
 
 async def main():
-    pp = pred.PricePredictor(testdata=False, country=pred.Country.DE)
+    pp = pred.PricePredictor(testdata=True, country=pred.Country.DE)
     #pp = pred.PricePredictor(testdata=False, country=pred.Country.AT)
     fulldata = await pp.prepare_dataframe()
+    #fulldata.to_csv("/tmp/data.csv")
     #print(fulldata)
     assert fulldata is not None
     fulldata.dropna(inplace=True)
