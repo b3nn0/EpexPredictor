@@ -209,9 +209,6 @@ class PricePredictor:
         df = df[df["time"] >= datetime.now(timezone.utc) - timedelta(days=self.learnDays)]
 
         locinfo = LocationInfo(name=self.config.COUNTRY_CODE, region=self.config.COUNTRY_CODE, timezone=self.config.TIMEZONE, latitude=statistics.mean(self.config.LATITUDES), longitude=statistics.mean(self.config.LONGITUDES))
-        s = sun.sun(locinfo.observer, date=datetime.fromisoformat("2025-10-26"))
-
-
         df["sr_influence"] = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunrise"]).total_seconds() / 60)))
         df["ss_influence"] = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunset"]).total_seconds() / 60)))
 
