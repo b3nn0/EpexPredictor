@@ -91,12 +91,12 @@ class PricePredictor:
     fulldata : pd.DataFrame | None = None
 
     testdata : bool = False
-    learnDays : int = 90
+    learnDays : int
     forecastDays : int
 
     predictor : KNeighborsRegressor | None = None
 
-    def __init__(self, country: Country = Country.DE, testdata : bool = False, learnDays=90, forecastDays=7):
+    def __init__(self, country: Country = Country.DE, testdata : bool = False, learnDays=30, forecastDays=7):
         self.config = COUNTRY_CONFIG[country]
         self.testdata = testdata
         self.learnDays = learnDays
@@ -129,15 +129,15 @@ class PricePredictor:
 
         # Since all numeric values (wind/solar/temperature) now have the same scaling/relevance to the output variable, we can now just sum them up
         # Intention: we don't care if we have a lot of production from wind OR from solar
-        windcols = [f"wind_{i}" for i in range(len(self.config.LATITUDES))]
-        irradiancecols = [f"irradiance_{i}" for i in range(len(self.config.LATITUDES))]
-        tempcols = [f"temp_{i}" for i in range(len(self.config.LATITUDES))]
-        weathercols = windcols + irradiancecols + tempcols
+        #windcols = [f"wind_{i}" for i in range(len(self.config.LATITUDES))]
+        #irradiancecols = [f"irradiance_{i}" for i in range(len(self.config.LATITUDES))]
+        #tempcols = [f"temp_{i}" for i in range(len(self.config.LATITUDES))]
+        #weathercols = windcols + irradiancecols + tempcols
 
-        params["weathersum"] = params[weathercols].sum(axis=1)
-        params.drop(columns=weathercols, inplace=True)
-        self.fulldata["weathersum"] = self.fulldata[weathercols].sum(axis=1)
-        self.fulldata.drop(columns=weathercols, inplace=True)
+        #params["weathersum"] = params[weathercols].sum(axis=1)
+        #params.drop(columns=weathercols, inplace=True)
+        #self.fulldata["weathersum"] = self.fulldata[weathercols].sum(axis=1)
+        #self.fulldata.drop(columns=weathercols, inplace=True)
 
         self.predictor = KNeighborsRegressor(n_neighbors=3).fit(params, output)
 
@@ -208,10 +208,6 @@ class PricePredictor:
         # Drop everything that's older than learnDays (useful if we e.g. load 90 days from testData=True, but only really want to evaluate 30 days)
         df = df[df["time"] >= datetime.now(timezone.utc) - timedelta(days=self.learnDays)]
 
-        locinfo = LocationInfo(name=self.config.COUNTRY_CODE, region=self.config.COUNTRY_CODE, timezone=self.config.TIMEZONE, latitude=statistics.mean(self.config.LATITUDES), longitude=statistics.mean(self.config.LONGITUDES))
-        df["sr_influence"] = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunrise"]).total_seconds() / 60)))
-        df["ss_influence"] = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunset"]).total_seconds() / 60)))
-
 
         tzlocal = pytz.timezone(self.config.TIMEZONE)
         holis = holidays.country_holidays(self.config.COUNTRY_CODE)
@@ -226,8 +222,17 @@ class PricePredictor:
                 col = df["time"].apply(lambda t: self.is_timestamp(tzlocal, t, h, m))
                 col.name = f"i_{h}_{m}"
                 timecols.append(col)
-        timecols.insert(0, df)
+        
+        locinfo = LocationInfo(name=self.config.COUNTRY_CODE, region=self.config.COUNTRY_CODE, timezone=self.config.TIMEZONE, latitude=statistics.mean(self.config.LATITUDES), longitude=statistics.mean(self.config.LONGITUDES))
+        sr_influence = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunrise"]).total_seconds() / 60)))
+        sr_influence.name = "sr_influence"
+        timecols.append(sr_influence)
 
+        ss_influence = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunset"]).total_seconds() / 60)))
+        ss_influence.name = "ss_influence"
+        timecols.append(ss_influence)
+
+        timecols.insert(0, df)
         df = pd.concat(timecols, axis=1)
 
        

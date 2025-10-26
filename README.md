@@ -41,7 +41,6 @@ the training parameters is.
 - This alone is not enough, because electricity prices are not linear.
 E.g. low wind&solar leads to gas power plants being turned on, and due to merit order pricing, electricity prices explode.
 - Therefore, we then multiply each parameter with its weight (LinReg factor) to get a "normalized" data set.
-- Since we don't care if prices are low due to high wind or high solar (or higher temperature, thus less heating), we now simply sum up all those normalized numeric values
 - In the next step, we use a KNN (k=3) approach to find hours in the past with similar properties and use that to determine the final price.
 
 ## Model performance

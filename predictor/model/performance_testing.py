@@ -12,7 +12,7 @@ logging.basicConfig(
 
 
 async def main():
-    pp = pred.PricePredictor(testdata=True, country=pred.Country.DE, learnDays=90) # + 10%, which we will remove for evaluation
+    pp = pred.PricePredictor(testdata=True, country=pred.Country.DE, learnDays=33) # + 10%, which we will remove for evaluation
     #pp = pred.PricePredictor(testdata=False, country=pred.Country.AT)
     fulldata = await pp.prepare_dataframe()
     #fulldata.to_csv("/tmp/data.csv")
@@ -20,7 +20,7 @@ async def main():
     assert fulldata is not None
     fulldata.dropna(inplace=True)
 
-    n = 500
+    n = 100
     sqerror = 0
     abserror = 0
     for i in range(n):
