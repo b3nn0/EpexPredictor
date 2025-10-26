@@ -4,7 +4,9 @@ import math
 from typing import Dict, List, Tuple, cast
 from enum import Enum
 import pandas as pd
-from datetime import datetime, tzinfo
+from datetime import datetime, timedelta, tzinfo, timezone
+from astral import sun, LocationInfo
+import statistics
 import pytz
 import aiohttp
 import json
@@ -89,12 +91,12 @@ class PricePredictor:
     fulldata : pd.DataFrame | None = None
 
     testdata : bool = False
-    learnDays : int = 30
+    learnDays : int = 90
     forecastDays : int
 
     predictor : KNeighborsRegressor | None = None
 
-    def __init__(self, country: Country = Country.DE, testdata : bool = False, learnDays=30, forecastDays=7):
+    def __init__(self, country: Country = Country.DE, testdata : bool = False, learnDays=90, forecastDays=7):
         self.config = COUNTRY_CONFIG[country]
         self.testdata = testdata
         self.learnDays = learnDays
@@ -203,6 +205,17 @@ class PricePredictor:
         datacols.remove("price")
         df = df.dropna(subset=datacols).copy()
 
+        # Drop everything that's older than learnDays (useful if we e.g. load 90 days from testData=True, but only really want to evaluate 30 days)
+        df = df[df["time"] >= datetime.now(timezone.utc) - timedelta(days=self.learnDays)]
+
+        locinfo = LocationInfo(name=self.config.COUNTRY_CODE, region=self.config.COUNTRY_CODE, timezone=self.config.TIMEZONE, latitude=statistics.mean(self.config.LATITUDES), longitude=statistics.mean(self.config.LONGITUDES))
+        s = sun.sun(locinfo.observer, date=datetime.fromisoformat("2025-10-26"))
+
+
+        df["sr_influence"] = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunrise"]).total_seconds() / 60)))
+        df["ss_influence"] = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunset"]).total_seconds() / 60)))
+
+
         tzlocal = pytz.timezone(self.config.TIMEZONE)
         holis = holidays.country_holidays(self.config.COUNTRY_CODE)
         df["holiday"] = df["time"].apply(lambda t: 1 if t.astimezone(tzlocal).weekday() == 6 or t.astimezone(tzlocal).date() in holis else 0)
@@ -219,7 +232,8 @@ class PricePredictor:
         timecols.insert(0, df)
 
         df = pd.concat(timecols, axis=1)
-        
+
+       
         df.set_index("time", inplace=True)
         return df
 
@@ -363,7 +377,7 @@ async def main():
         level=logging.INFO
     )
 
-    pred = PricePredictor(testdata=False)
+    pred = PricePredictor(testdata=True)
     await pred.train()
 
     actual = await pred.predict()

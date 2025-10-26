@@ -3,4 +3,5 @@ scikit-learn
 pandas
 numpy
 aiohttp
+astral
 fastapi[standard]

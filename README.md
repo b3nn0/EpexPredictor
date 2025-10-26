@@ -16,7 +16,7 @@ Supported Countries:
 - Maybe package it directly as a Home Assistant Add-on
 
 ## The Model
-We sample a few sample points all over the country and fetch hourly [Weather data from Open-Meteo.com](https://open-meteo.com/) for those for the past n days (default n=30).
+We sample a few sample points all over the country and fetch hourly [Weather data from Open-Meteo.com](https://open-meteo.com/) for those for the past n days (default n=90).
 This serves as the main data source.
 
 
@@ -29,6 +29,8 @@ Parameters:
 - Hour of day
 - Day of the week from monday to saturday
 - Whether it is a Holiday/Sunday
+- A measure of sunrise influence - how many minutes between sunrise and now, capped at 3 hours: $\min(180, |t_{now} - t_{sunrise}|)$ and vice versa for
+- A measure of sunset influence, same formula
 
 Output:
 - Electricity price
@@ -44,6 +46,9 @@ E.g. low wind&solar leads to gas power plants being turned on, and due to merit 
 
 ## Model performance
 For performance testing, we used historical weather data with a 90%/10% split for a training/testing data set. See `predictor/model/performance_testing.py`.
+
+WARNING: These results are out of date, when electricity prices were still hourly.
+They will be updated once a full learning period (90 days) exists with only quarter-hourly data. Until then, model performance will likely be worse.
 
 Results:\
 DE: Mean squared error ~4.02 ct/kWh, mean absolute error ~1.42 ct/kWh\
