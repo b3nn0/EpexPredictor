@@ -28,12 +28,14 @@ class Country(str, Enum):
 class CountryConfig:
     COUNTRY_CODE : str
     FILTER : str
+    BIDDING_ZONE : str
     LATITUDES : list[float]
     LONGITUDES : list[float]
 
-    def __init__ (self, COUNTRY_CODE, FILTER, TIMEZONE, LATITUDES, LONGITUDES):
+    def __init__ (self, COUNTRY_CODE, FILTER, TIMEZONE, BIDDING_ZONE, LATITUDES, LONGITUDES):
         self.COUNTRY_CODE = COUNTRY_CODE
         self.FILTER = FILTER
+        self.BIDDING_ZONE = BIDDING_ZONE
         self.TIMEZONE = TIMEZONE
         self.LATITUDES = LATITUDES
         self.LONGITUDES = LONGITUDES
@@ -43,6 +45,7 @@ COUNTRY_CONFIG = {
         Country.DE:  CountryConfig(
                 COUNTRY_CODE = "DE",
                 FILTER = "4169",
+                BIDDING_ZONE = "DE-LU",
                 TIMEZONE = "Europe/Berlin",
                 LATITUDES =  [
                     48.4,
@@ -64,6 +67,7 @@ COUNTRY_CONFIG = {
         Country.AT : CountryConfig(
                 COUNTRY_CODE = "AT",
                 FILTER = "4170",
+                BIDDING_ZONE = "AT",
                 TIMEZONE = "Europe/Berlin",
                 LATITUDES = [
                     48.36,
@@ -122,10 +126,10 @@ class PricePredictor:
         
         # Apply same scaling to learning set and full data
         params *= param_scaling_factors
-        orig_price = self.fulldata["price"]
-        self.fulldata.drop(columns=["price"], inplace=True)
-        self.fulldata *= param_scaling_factors
-        self.fulldata["price"] = orig_price
+
+        to_scale = self.fulldata.drop(columns=["price"])
+        to_scale *= param_scaling_factors
+        self.fulldata = pd.concat([to_scale, self.fulldata["price"]], axis=1)
 
         # Since all numeric values (wind/solar/temperature) now have the same scaling/relevance to the output variable, we can now just sum them up
         # Intention: we don't care if we have a lot of production from wind OR from solar
@@ -303,6 +307,38 @@ class PricePredictor:
 
     async def fetch_prices(self) -> pd.DataFrame | None:
         cacheFn = f"prices_{self.config.COUNTRY_CODE}.json"
+        if self.testdata and os.path.exists(cacheFn):
+            log.warning("Loading prices from persistent cache!")
+            await asyncio.sleep(0) # simulate async http
+            prices = pd.read_json(cacheFn)
+            prices.index = prices.index.tz_localize("UTC") # type: ignore
+            prices.index.set_names("time", inplace=True)
+            return prices
+
+        startTs = (datetime.now(timezone.utc) - timedelta(days=self.learnDays)).timestamp()
+        endTs = (datetime.now() + timedelta(days=5)).timestamp()
+        url = f"https://api.energy-charts.info/price?bzn={self.config.BIDDING_ZONE}&start={int(startTs)}&end={int(endTs)}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers={"accept": "application/json"}) as resp:
+                data = await resp.json()
+                timestamps = data["unix_seconds"]
+                prices = data["price"]
+                data = pd.DataFrame.from_dict(dict(zip(timestamps, prices)), orient="index", columns=["price"])
+                data.index = pd.to_datetime(data.index, unit="s", utc=True)
+                data.index.name = "time"
+                data["price"] = data["price"] / 10
+
+                if self.testdata:
+                    data.to_json(cacheFn)
+                return data
+
+
+
+
+    """
+    # Disabled for now. smard seems to be very slow, often not even having prices for the current day...
+    async def fetch_prices_smard(self) -> pd.DataFrame | None:
+        cacheFn = f"prices_{self.config.COUNTRY_CODE}.json"
 
         if self.testdata and os.path.exists(cacheFn):
             log.warning("Loading prices from persistent cache!")
@@ -361,6 +397,7 @@ class PricePredictor:
                 data.to_json(cacheFn)
 
             return data
+    """
 
     def get_last_known_price(self) -> Tuple[datetime, float] | None:
         if self.prices is None:
