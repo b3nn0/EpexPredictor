@@ -152,7 +152,7 @@ class CountryPrices:
             # Update prices every 12 hours. If it's after 13:00 local, and we don't have prices for the next day yet, update every 5 minutes
             latest_price = self.predictor.get_last_known_price()
             price_update_frequency = 12 * 60 * 60
-            if latest_price is None or (latest_price[0] - datetime.datetime.now(pytz.UTC)).total_seconds() <= 60 * 60 * 10:
+            if latest_price is None or (latest_price[0] - datetime.datetime.now(pytz.UTC)).total_seconds() <= 60 * 60 * 11:
                 price_update_frequency = 5 * 60
 
             retrain = False
