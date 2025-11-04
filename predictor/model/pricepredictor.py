@@ -22,8 +22,9 @@ from sklearn.neighbors import KNeighborsRegressor
 log = logging.getLogger(__name__)
 
 class Country(str, Enum):
-    DE = 'DE'
-    AT = 'AT'
+    DE = "DE"
+    AT = "AT"
+    BE = "BE"
 
 class CountryConfig:
     COUNTRY_CODE : str
@@ -32,9 +33,8 @@ class CountryConfig:
     LATITUDES : list[float]
     LONGITUDES : list[float]
 
-    def __init__ (self, COUNTRY_CODE, FILTER, TIMEZONE, BIDDING_ZONE, LATITUDES, LONGITUDES):
+    def __init__ (self, COUNTRY_CODE, TIMEZONE, BIDDING_ZONE, LATITUDES, LONGITUDES):
         self.COUNTRY_CODE = COUNTRY_CODE
-        self.FILTER = FILTER
         self.BIDDING_ZONE = BIDDING_ZONE
         self.TIMEZONE = TIMEZONE
         self.LATITUDES = LATITUDES
@@ -42,49 +42,28 @@ class CountryConfig:
 
 # We sample these coordinates for solar/wind/temperature
 COUNTRY_CONFIG = {
-        Country.DE:  CountryConfig(
-                COUNTRY_CODE = "DE",
-                FILTER = "4169",
-                BIDDING_ZONE = "DE-LU",
-                TIMEZONE = "Europe/Berlin",
-                LATITUDES =  [
-                    48.4,
-                    49.7,
-                    51.3,
-                    52.8,
-                    53.8,
-                    54.1
-                ],
-                LONGITUDES = [
-                    9.3,
-                    11.3,
-                    8.6,
-                    12.0,
-                    8.1,
-                    11.6
-                ]
-               ),
-        Country.AT : CountryConfig(
-                COUNTRY_CODE = "AT",
-                FILTER = "4170",
-                BIDDING_ZONE = "AT",
-                TIMEZONE = "Europe/Berlin",
-                LATITUDES = [
-                    48.36,
-                    48.27,
-                    47.32,
-                    47.00,
-                    47.11
-                ],
-                LONGITUDES = [
-                    16.31,
-                    13.85,
-                    10.82,
-                    13.54,
-                    15.80
-                ],
-               ),
-        }
+    Country.DE:  CountryConfig(
+        COUNTRY_CODE = "DE",
+        BIDDING_ZONE = "DE-LU",
+        TIMEZONE = "Europe/Berlin",
+        LATITUDES =  [48.4, 49.7, 51.3, 52.8, 53.8, 54.1],
+        LONGITUDES = [9.3, 11.3, 8.6, 12.0, 8.1, 11.6]
+    ),
+    Country.AT : CountryConfig(
+        COUNTRY_CODE = "AT",
+        BIDDING_ZONE = "AT",
+        TIMEZONE = "Europe/Berlin",
+        LATITUDES = [48.36, 48.27, 47.32, 47.00, 47.11],
+        LONGITUDES = [16.31, 13.85, 10.82, 13.54, 15.80],
+    ),
+    Country.BE : CountryConfig(
+        COUNTRY_CODE = "BE",
+        BIDDING_ZONE = "BE",
+        TIMEZONE = "Europe/Berlin",
+        LATITUDES=[51.27, 50.73, 49.99],
+        LONGITUDES=[3.07, 4.79, 5.38],
+    ),
+}
 
 
 class PricePredictor:
@@ -332,72 +311,6 @@ class PricePredictor:
                     data.to_json(cacheFn)
                 return data
 
-
-
-
-    """
-    # Disabled for now. smard seems to be very slow, often not even having prices for the current day...
-    async def fetch_prices_smard(self) -> pd.DataFrame | None:
-        cacheFn = f"prices_{self.config.COUNTRY_CODE}.json"
-
-        if self.testdata and os.path.exists(cacheFn):
-            log.warning("Loading prices from persistent cache!")
-            await asyncio.sleep(0) # simulate async http
-            prices = pd.read_json(cacheFn)
-            prices.index = prices.index.tz_localize("UTC") # type: ignore
-            prices.index.set_names("time", inplace=True)
-            return prices
-
-        filter = self.config.FILTER # marktpreis
-        region = self.config.COUNTRY_CODE 
-        filterCopy = filter
-        regionCopy = region
-        resolution = "quarterhour"
-
-        # Get available timestamps
-        url = f"https://www.smard.de/app/chart_data/{filter}/{region}/index_{resolution}.json"
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                data = await resp.text()
-                timestamps : List[int] = json.loads(data)["timestamps"]
-                timestamps.sort()
-
-            startTs = 1000 * (int(time.time()) - self.learnDays * 24 * 60 * 60)
-        
-            startIndex = len(timestamps) - 1
-            for i, timestamp in enumerate(timestamps):
-                if timestamp > startTs:
-                    startIndex = i - 1
-                    break
-            timestamps = timestamps[startIndex:]
-
-            pricesDict = {}
-
-            for timestamp in timestamps:
-                url = f"https://www.smard.de/app/chart_data/{filter}/{region}/{filterCopy}_{regionCopy}_{resolution}_{timestamp}.json"
-                async with session.get(url) as resp:
-                    data = await resp.text()
-                    series : List = json.loads(data)["series"]
-                    for entry in series:
-                        price = entry[1]
-                        if price is None:
-                            continue
-                        dt = datetime.fromtimestamp(entry[0] / 1000, tz=pytz.timezone("Europe/Berlin"))
-                        dt = dt.astimezone(pytz.UTC)
-                        pricesDict[dt] = price
-            
-            data = pd.DataFrame.from_dict(pricesDict, orient="index", columns=["price"]).reset_index()
-            data.rename(columns={"index": "time"}, inplace=True)
-            data["time"] = pd.to_datetime(data["time"], utc=True)
-            data["price"] = data["price"] / 10
-            data.set_index("time", inplace=True)
-
-            if self.testdata:
-                data.to_json(cacheFn)
-
-            return data
-    """
 
     def get_last_known_price(self) -> Tuple[datetime, float] | None:
         if self.prices is None:

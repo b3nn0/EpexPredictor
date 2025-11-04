@@ -10,6 +10,8 @@ This repository includes
 Supported Countries:
 - Germany (default)
 - Austria
+- Belgium
+- Others can be added relatively easily, if there is interest
 
 
 ## Lookout
@@ -51,8 +53,9 @@ WARNING: These results are out of date, when electricity prices were still hourl
 They will be updated once a full learning period (90 days) exists with only quarter-hourly data. Until then, model performance will likely be worse.
 
 Results:\
-DE: Mean squared error ~4.02 ct/kWh, mean absolute error ~1.42 ct/kWh\
-AT: Mean squared error ~5.20 ct/kWh, mean absolute error ~1.66 ct/kWh
+DE: Mean squared error ~6.28 ct/kWh, mean absolute error ~1.46 ct/kWh\
+AT: Mean squared error ~7.65 ct/kWh, mean absolute error ~1.58 ct/kWh\
+BE: Mean squared error ~3.99 ct/kWh, mean absolute error ~1.37 ct/kWh
 
 Some observations:
 - At night, predictions are usually within 1-2ct/kWh

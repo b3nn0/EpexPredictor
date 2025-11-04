@@ -20,7 +20,7 @@ There are no guarantees on availability or correctnes of the data.
 This is an open source project, feel free to host it yourself. [Source code and docs](https://github.com/b3nn0/EpexPredictor)
 
 ### Attribution
-Electricity prices provided by [Bundesnetzagentur | SMARD.de](https://smard.de)
+Electricity prices provided under CC-BY-4.0 by [energy-charts.info](https://api.energy-charts.info/)
 
 [Weather data by Open-Meteo.com](https://open-meteo.com/)
 """)
@@ -188,7 +188,11 @@ class PricesModel(BaseModel):
     knownUntil: datetime.datetime
 
 class Prices:
-    countryPrices : Dict[Country, CountryPrices] = {Country.DE: CountryPrices(Country.DE), Country.AT: CountryPrices(Country.AT)}
+    countryPrices : Dict[Country, CountryPrices] = {
+        Country.DE: CountryPrices(Country.DE),
+        Country.AT: CountryPrices(Country.AT),
+        Country.BE: CountryPrices(Country.BE)
+    }
 
     def __init__(self):
         pass
