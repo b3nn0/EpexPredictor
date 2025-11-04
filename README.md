@@ -97,7 +97,7 @@ I might stop or block this service at any time. Fair use is expected!
 At some point, I might create a HA addon to run everything locally.
 For now, you have to either use my server, or run it yourself.
 
-Note: Home Assistant only supports a limited amount of data in state attributes. Therefore, this graph will be limited to 72 hours.
+Note: Home Assistant only supports a limited amount of data in state attributes. Therefore, we use the "short format" output, and limit the time to 120 hours.
 If you need more, you will have to be more creative.
 Personally, I provide the data as a HA "service" (now "action") using pyscript, and then call this service to work with the data.
 
@@ -108,28 +108,29 @@ Personally, I provide the data as a HA "service" (now "action") using pyscript, 
 # Make sure you change the parameters fixedPrice and taxPercent according to your electricity plan
 sensor:
   - platform: rest
-    resource: "https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19&hours=72"
+    resource: "https://epexpredictor.batzill.com/prices_short?fixedPrice=13.70084&taxPercent=19&unit=EUR_PER_KWH&hours=120"
     method: GET
     unique_id: epex_price_prediction
     name: "EPEX Price Prediction"
-    scan_interval: 500
-    unit_of_measurement: ct/kWh
-    value_template: "{{ value_json.prices[0].total }}"
+    unit_of_measurement: €/kWh
+    value_template: "{{ value_json.t[0] }}"
     json_attributes:
-      - prices
+      - s
+      - t
 
   # If you want to evaluate performance in real time, you can add another sensor like this
   # and plot it in the same diagram as the actual prediction sensor
 
   #- platform: rest
-  #  resource: "https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19&evaluation=true&hours=72"
+  #  resource: "https://epexpredictor.batzill.com/prices_short?fixedPrice=13.70084&taxPercent=19&evaluation=true&unit=EUR_PER_KWH&hours=120"
   #  method: GET
   #  unique_id: epex_price_prediction_evaluation
   #  name: "EPEX Price Prediction Evaluation"
-  #  unit_of_measurement: ct/kWh
-  #  value_template: "{{ value_json.prices[0].total }}"
+  #  unit_of_measurement: €/kWh
+  #  value_template: "{{ value_json.t[0] }}"
   #  json_attributes:
-  #    - prices
+  #    - s
+  #    - t
 ```
 
 ### Display, e.g. via Plotly Graph Card:
@@ -144,13 +145,6 @@ layout:
     maxallowed: 1
 entities:
   - entity: sensor.epex_price_prediction
-    name: EPEX Price History
-    unit_of_measurement: ct/kWh
-    texttemplate: "%{y:.0f}"
-    mode: lines+text
-    textposition: top right
-  - entity: sensor.epex_price_prediction
-    attribute: dummy
     name: EPEX Price Prediction
     unit_of_measurement: ct/kWh
     texttemplate: "%{y:.0f}"
@@ -158,10 +152,12 @@ entities:
     textposition: top right
     filters:
       - fn: |-
-          ({meta}) => ({
-              xs: meta.prices.map(p => new Date(p.startsAt)),
-              ys: meta.prices.map(p => p.total)
-          })
+          ({xs, ys, meta}) => {
+            return {
+              xs: xs.concat(meta.s.map(s => s*1000)),
+              ys: ys.concat(meta.t).map(t => +t*100)
+            }
+          }
   - entity: ""
     name: Now
     yaxis: y9
