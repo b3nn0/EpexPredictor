@@ -64,6 +64,20 @@ class OutputFormat(str, Enum):
     LONG = "LONG"
     SHORT = "SHORT"
 
+class PriceModel(BaseModel):
+    startsAt : datetime.datetime
+    total: float
+
+class PricesModelShort(BaseModel):
+    s : list[int]
+    t : list[float]
+
+class PricesModel(BaseModel):
+    prices : list[PriceModel]
+    knownUntil: datetime.datetime
+
+
+    
 class CountryPrices:
     predictor : pp.PricePredictor
 
@@ -190,18 +204,6 @@ class CountryPrices:
         finally:
             self.updateTask = None
 
-
-class PriceModel(BaseModel):
-    startsAt : datetime.datetime
-    total: float
-
-class PricesModelShort(BaseModel):
-    s : list[int]
-    t : list[float]
-
-class PricesModel(BaseModel):
-    prices : list[PriceModel]
-    knownUntil: datetime.datetime
 
 
 class Prices:
