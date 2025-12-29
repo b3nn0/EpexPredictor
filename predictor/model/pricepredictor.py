@@ -79,7 +79,7 @@ class PricePredictor:
 
     predictor : KNeighborsRegressor | None = None
 
-    def __init__(self, country: Country = Country.DE, testdata : bool = False, learnDays=50, forecastDays=7):
+    def __init__(self, country: Country = Country.DE, testdata : bool = False, learnDays=90, forecastDays=7):
         self.config = COUNTRY_CONFIG[country]
         self.testdata = testdata
         self.learnDays = learnDays
