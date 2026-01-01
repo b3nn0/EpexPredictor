@@ -210,7 +210,8 @@ class Prices:
     countryPrices : Dict[Country, CountryPrices] = {
         Country.DE: CountryPrices(Country.DE),
         Country.AT: CountryPrices(Country.AT),
-        Country.BE: CountryPrices(Country.BE)
+        Country.BE: CountryPrices(Country.BE),
+        Country.NL: CountryPrices(Country.NL),
     }
 
     def __init__(self):

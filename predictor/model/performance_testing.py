@@ -12,9 +12,10 @@ logging.basicConfig(
 
 
 async def main():
-    pp = pred.PricePredictor(testdata=True, country=pred.Country.DE, learnDays=93) # + 10%, which we will remove for evaluation
+    #pp = pred.PricePredictor(testdata=True, country=pred.Country.DE, learnDays=93) # + 10%, which we will remove for evaluation
     #pp = pred.PricePredictor(testdata=True, country=pred.Country.AT, learnDays=93)
     #pp = pred.PricePredictor(testdata=True, country=pred.Country.BE, learnDays=93) # + 10%, which we will remove for evaluation
+    pp = pred.PricePredictor(testdata=True, country=pred.Country.NL, learnDays=93) # + 10%, which we will remove for evaluation
     fulldata = await pp.prepare_dataframe()
     #fulldata.to_csv("/tmp/data.csv")
     #print(fulldata)

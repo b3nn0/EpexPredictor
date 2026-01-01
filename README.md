@@ -11,6 +11,7 @@ Supported Countries:
 - Germany (default)
 - Austria
 - Belgium
+- Netherlands
 - Others can be added relatively easily, if there is interest
 
 
@@ -52,7 +53,8 @@ For performance testing, we used historical weather data with a 90%/10% split fo
 Results:\
 DE: Mean squared error ~5.3 ct/kWh, mean absolute error ~1.4 ct/kWh\
 AT: Mean squared error ~5.9 ct/kWh, mean absolute error ~1.5 ct/kWh\
-BE: Mean squared error ~3.5 ct/kWh, mean absolute error ~1.3 ct/kWh
+BE: Mean squared error ~3.5 ct/kWh, mean absolute error ~1.3 ct/kWh\
+NL: Mean squared error ~4.0 ct/kWh, mean absolute error ~1.3 ct/kWh
 
 Some observations:
 - At night, predictions are usually within 1-2ct/kWh

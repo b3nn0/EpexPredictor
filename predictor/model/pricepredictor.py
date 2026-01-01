@@ -25,6 +25,7 @@ class Country(str, Enum):
     DE = "DE"
     AT = "AT"
     BE = "BE"
+    NL = "NL"
 
 class CountryConfig:
     COUNTRY_CODE : str
@@ -62,6 +63,13 @@ COUNTRY_CONFIG = {
         TIMEZONE = "Europe/Berlin",
         LATITUDES=[51.27, 50.73, 49.99],
         LONGITUDES=[3.07, 4.79, 5.38],
+    ),
+    Country.NL : CountryConfig(
+        COUNTRY_CODE = "NL",
+        BIDDING_ZONE = "NL",
+        TIMEZONE = "Europe/Amsterdam",
+        LATITUDES=[52.69, 52.36, 50.51],
+        LONGITUDES=[6.11, 4.90, 5.41],
     ),
 }
 
