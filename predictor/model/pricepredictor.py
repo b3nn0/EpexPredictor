@@ -4,7 +4,7 @@ import math
 from typing import Dict, List, Tuple, cast
 from enum import Enum
 import pandas as pd
-from datetime import datetime, timedelta, tzinfo, timezone
+from datetime import datetime, date, timedelta, tzinfo, timezone
 from astral import sun, LocationInfo
 import statistics
 import pytz
@@ -33,6 +33,8 @@ class CountryConfig:
     BIDDING_ZONE : str
     LATITUDES : list[float]
     LONGITUDES : list[float]
+    HOLIDAYS : list[holidays.HolidayBase] # one entry for each regional holiday set, e.g. one for BW, one for BY, ...
+    
 
     def __init__ (self, COUNTRY_CODE, TIMEZONE, BIDDING_ZONE, LATITUDES, LONGITUDES):
         self.COUNTRY_CODE = COUNTRY_CODE
@@ -41,6 +43,15 @@ class CountryConfig:
         self.LATITUDES = LATITUDES
         self.LONGITUDES = LONGITUDES
 
+        self.HOLIDAYS = []
+        country_holidays = holidays.country_holidays(self.COUNTRY_CODE)
+        if country_holidays.subdivisions is None or len(country_holidays.subdivisions) == 0:
+            self.HOLIDAYS.append(country_holidays)
+        else:
+            for subdiv in country_holidays.subdivisions:
+                self.HOLIDAYS.append(holidays.country_holidays(country=self.COUNTRY_CODE, subdiv=subdiv))
+
+
 # We sample these coordinates for solar/wind/temperature
 COUNTRY_CONFIG = {
     Country.DE:  CountryConfig(
@@ -48,7 +59,7 @@ COUNTRY_CONFIG = {
         BIDDING_ZONE = "DE-LU",
         TIMEZONE = "Europe/Berlin",
         LATITUDES =  [48.4, 49.7, 51.3, 52.8, 53.8, 54.1],
-        LONGITUDES = [9.3, 11.3, 8.6, 12.0, 8.1, 11.6]
+        LONGITUDES = [9.3, 11.3, 8.6, 12.0, 8.1, 11.6],
     ),
     Country.AT : CountryConfig(
         COUNTRY_CODE = "AT",
@@ -180,6 +191,21 @@ class PricePredictor:
     def is_timestamp(self, tz : tzinfo, t : datetime, h : int, m : int) -> int:
         local = t.astimezone(tz)
         return 1 if local.hour == h and local.minute == m else 0
+    
+    def is_holiday(self, t : datetime) -> float:
+        if t.weekday() == 6:
+            return 1
+        
+        date = t.date()
+       
+        cnt_holiday = 0
+        for h in self.config.HOLIDAYS:
+            if date in h:
+                cnt_holiday += 1
+        # Average regional holidays. E.g. if it's a holiday in half of the regions -> 0.5
+        result = cnt_holiday / len(self.config.HOLIDAYS)
+        return result
+
 
     async def prepare_dataframe(self) -> pd.DataFrame | None:
         if self.weather is None:
@@ -201,8 +227,7 @@ class PricePredictor:
 
 
         tzlocal = pytz.timezone(self.config.TIMEZONE)
-        holis = holidays.country_holidays(self.config.COUNTRY_CODE)
-        df["holiday"] = df["time"].apply(lambda t: 1 if t.astimezone(tzlocal).weekday() == 6 or t.astimezone(tzlocal).date() in holis else 0)
+        df["holiday"] = df["time"].apply(lambda t: self.is_holiday(t.astimezone(tzlocal)))
         for i in range(6):
             df[f"day_{i}"] = df["time"].apply(lambda t: 1 if t.astimezone(tzlocal).weekday() == i else 0)
         #df["saturday"] = df["time"].apply(lambda t: 1 if t.weekday() == 5 else 0)

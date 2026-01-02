@@ -32,7 +32,7 @@ Parameters:
 - Expected solar irradiance for each location
 - Hour of day
 - Day of the week from monday to saturday
-- Whether it is a Holiday/Sunday
+- Whether it is a Holiday/Sunday (regional holidays are considered by the number of regions they apply to, e.g. 0.5 if a holiday applies to half the regions of a country)
 - A measure of sunrise influence - how many minutes between sunrise and now, capped at 3 hours: $\min(180, |t_{now} - t_{sunrise}|)$ and vice versa for
 - A measure of sunset influence, same formula
 
@@ -51,9 +51,9 @@ E.g. low wind&solar leads to gas power plants being turned on, and due to merit 
 For performance testing, we used historical weather data with a 90%/10% split for a training/testing data set. See `predictor/model/performance_testing.py`.
 
 Results:\
-DE: Mean squared error ~5.3 ct/kWh, mean absolute error ~1.4 ct/kWh\
+DE: Mean squared error ~4.8 ct/kWh, mean absolute error ~1.3 ct/kWh\
 AT: Mean squared error ~5.9 ct/kWh, mean absolute error ~1.5 ct/kWh\
-BE: Mean squared error ~3.5 ct/kWh, mean absolute error ~1.3 ct/kWh\
+BE: Mean squared error ~3.1 ct/kWh, mean absolute error ~1.2 ct/kWh\
 NL: Mean squared error ~4.0 ct/kWh, mean absolute error ~1.3 ct/kWh
 
 Some observations:
