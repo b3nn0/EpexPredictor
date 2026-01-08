@@ -16,7 +16,7 @@ import asyncio
 import holidays
 import time
 
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Lasso
 from sklearn.neighbors import KNeighborsRegressor
 
 log = logging.getLogger(__name__)
@@ -58,29 +58,85 @@ COUNTRY_CONFIG = {
         COUNTRY_CODE = "DE",
         BIDDING_ZONE = "DE-LU",
         TIMEZONE = "Europe/Berlin",
-        LATITUDES =  [48.4, 49.7, 51.3, 52.8, 53.8, 54.1],
-        LONGITUDES = [9.3, 11.3, 8.6, 12.0, 8.1, 11.6],
+        # 64 locations: Aggressive distribution - large states get 5-6, medium get 4, small get 3
+        # BW (5): Stuttgart, Freiburg, Karlsruhe, Ulm, Mannheim
+        LATITUDES =  [48.78, 47.99, 49.01, 48.40, 49.49,
+        # BY (6): Munich, Nuremberg, Regensburg, Augsburg, Würzburg, Ingolstadt
+                      48.14, 49.45, 49.02, 48.37, 49.79, 48.76,
+        # NI (5): Hannover, Oldenburg, Braunschweig, Osnabrück, Göttingen
+                      52.37, 53.14, 52.27, 52.28, 51.54,
+        # NW (6): Cologne, Dortmund, Düsseldorf, Münster, Essen, Bielefeld
+                      50.94, 51.51, 51.23, 51.96, 51.46, 52.02,
+        # BB (4): Potsdam, Cottbus, Frankfurt/Oder, Brandenburg
+                      52.40, 51.76, 52.34, 52.41,
+        # SH (4): Kiel, Lübeck, Flensburg, Husum (offshore wind)
+                      54.32, 53.87, 54.78, 54.48,
+        # MV (4): Rostock, Schwerin, Greifswald, Stralsund
+                      54.09, 53.63, 54.10, 54.31,
+        # SN (4): Dresden, Leipzig, Chemnitz, Zwickau
+                      51.05, 51.34, 50.83, 50.72,
+        # ST (4): Magdeburg, Halle, Dessau, Quedlinburg
+                      51.95, 51.48, 51.84, 51.79,
+        # HE (4): Frankfurt, Kassel, Wiesbaden, Darmstadt
+                      50.11, 51.32, 50.08, 49.87,
+        # RP (4): Mainz, Trier, Koblenz, Ludwigshafen
+                      49.99, 49.76, 50.36, 49.48,
+        # TH (4): Erfurt, Jena, Gera, Weimar
+                      50.98, 50.93, 50.88, 50.98,
+        # BE (3): Berlin-Mitte, Berlin-Spandau, Berlin-Köpenick
+                      52.52, 52.53, 52.45,
+        # HB (3): Bremen, Bremerhaven, Bremen-Nord
+                      53.08, 53.55, 53.17,
+        # HH (3): Hamburg-Center, Hamburg-Harburg, Hamburg-Bergedorf
+                      53.55, 53.46, 53.49,
+        # SL (3): Saarbrücken, Neunkirchen, Saarlouis
+                      49.24, 49.35, 49.31],
+        LONGITUDES = [9.18, 7.85, 8.40, 9.99, 8.47,
+                      11.58, 11.08, 12.10, 10.90, 9.94, 11.42,
+                      9.74, 8.21, 10.52, 7.97, 9.93,
+                      6.96, 7.47, 6.77, 7.63, 7.01, 8.53,
+                      13.07, 14.33, 14.55, 12.56,
+                      10.14, 10.69, 9.54, 9.05,
+                      12.10, 11.42, 13.38, 13.09,
+                      13.74, 12.38, 12.92, 12.48,
+                      11.93, 11.97, 12.24, 11.14,
+                      8.68, 9.48, 8.24, 8.65,
+                      8.27, 6.64, 7.60, 8.44,
+                      11.03, 11.59, 12.08, 11.33,
+                      13.40, 13.20, 13.57,
+                      8.80, 8.58, 8.65,
+                      10.00, 9.97, 10.21,
+                      6.99, 7.21, 6.75],
     ),
     Country.AT : CountryConfig(
         COUNTRY_CODE = "AT",
         BIDDING_ZONE = "AT",
         TIMEZONE = "Europe/Berlin",
-        LATITUDES = [48.36, 48.27, 47.32, 47.00, 47.11],
-        LONGITUDES = [16.31, 13.85, 10.82, 13.54, 15.80],
+        # 24 locations: 2-3 per state covering Vienna, Lower/Upper Austria, Styria, Tyrol, Carinthia, Salzburg, Vorarlberg, Burgenland
+        # Vienna (2), Lower Austria (3), Upper Austria (3), Styria (3), Tyrol (3), Carinthia (2), Salzburg (3), Vorarlberg (2), Burgenland (3)
+        LATITUDES = [48.21, 48.27, 48.31, 48.09, 47.68, 48.31, 48.24, 48.03, 47.07, 47.27, 47.56, 47.26, 47.07, 46.62, 47.80, 47.81, 47.48, 47.30, 47.08, 46.77, 47.62, 47.08, 47.85, 47.31],
+        LONGITUDES = [16.37, 16.17, 15.63, 16.25, 15.44, 14.29, 14.51, 13.93, 15.44, 15.04, 14.29, 13.09, 11.40, 14.31, 13.04, 12.88, 13.38, 10.90, 12.68, 13.37, 14.66, 9.67, 16.53, 16.38],
     ),
     Country.BE : CountryConfig(
         COUNTRY_CODE = "BE",
         BIDDING_ZONE = "BE",
         TIMEZONE = "Europe/Berlin",
-        LATITUDES=[51.27, 50.73, 49.99],
-        LONGITUDES=[3.07, 4.79, 5.38],
+        # 12 locations: 4 per region (Flanders, Wallonia, Brussels) covering major cities and geographic spread
+        # Flanders (4): Antwerp, Ghent, Bruges, Leuven
+        # Wallonia (4): Liège, Charleroi, Namur, Mons
+        # Brussels + extras (4): Brussels, Mechelen, Hasselt, Arlon
+        LATITUDES = [51.22, 51.05, 51.21, 50.88, 50.63, 50.41, 50.47, 50.45, 50.85, 51.03, 50.93, 49.68],
+        LONGITUDES = [4.40, 3.72, 3.22, 4.70, 5.57, 4.44, 4.87, 3.95, 4.35, 4.48, 5.33, 5.82],
     ),
     Country.NL : CountryConfig(
         COUNTRY_CODE = "NL",
         BIDDING_ZONE = "NL",
         TIMEZONE = "Europe/Amsterdam",
-        LATITUDES=[52.69, 52.36, 50.51],
-        LONGITUDES=[6.11, 4.90, 5.41],
+        # 18 locations: 1-2 per province covering coastal, central, and southern regions
+        # North: Groningen, Friesland, Drenthe | West: North/South Holland, Utrecht | Central: Gelderland, Flevoland, Overijssel
+        # South: North Brabant, Limburg, Zeeland
+        LATITUDES = [53.22, 53.20, 52.99, 52.37, 52.16, 52.09, 51.99, 52.51, 52.52, 52.42, 51.69, 51.44, 51.56, 51.81, 51.99, 51.44, 51.35, 50.85],
+        LONGITUDES = [6.57, 5.79, 6.56, 4.90, 4.50, 5.12, 5.89, 6.08, 5.47, 4.62, 4.78, 5.47, 5.09, 5.84, 4.14, 3.61, 6.17, 5.69],
     ),
 }
 
@@ -106,7 +162,8 @@ class PricePredictor:
 
     
     async def train(self, subset=None, prepare=True) -> None:
-        # To determine the importance of each parameter, we first weight them using linreg, because knn is treating difference in each parameter uniformly
+        # To determine the importance of each parameter, we first weight them using Lasso regression
+        # Lasso (L1 regularization) helps by zeroing out less important features
         if prepare:
             self.fulldata = await self.prepare_dataframe()
         if self.fulldata is None:
@@ -119,9 +176,11 @@ class PricePredictor:
 
         params = learnset.drop(columns=["price"])
         output = learnset["price"]
-        linreg = LinearRegression().fit(params, output)
-        param_scaling_factors = linreg.coef_
-        
+
+        # Use Lasso regression for feature weighting (alpha=0.1 provides good regularization)
+        reg = Lasso(alpha=0.1).fit(params, output)
+        param_scaling_factors = reg.coef_
+
         # Apply same scaling to learning set and full data
         params *= param_scaling_factors
 
@@ -141,7 +200,7 @@ class PricePredictor:
         #self.fulldata["weathersum"] = self.fulldata[weathercols].sum(axis=1)
         #self.fulldata.drop(columns=weathercols, inplace=True)
 
-        self.predictor = KNeighborsRegressor(n_neighbors=3).fit(params, output)
+        self.predictor = KNeighborsRegressor(n_neighbors=7).fit(params, output)
 
         
 
@@ -251,7 +310,7 @@ class PricePredictor:
         timecols.insert(0, df)
         df = pd.concat(timecols, axis=1)
 
-       
+
         df.set_index("time", inplace=True)
         return df
 

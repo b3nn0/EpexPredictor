@@ -40,28 +40,28 @@ Output:
 - Electricity price
 
 ## How it works
-- First, we create a simple multi-linear-regression to get an idea how important each of
-the training parameters is.
+- First, we use Lasso regression (L1 regularization) to determine the importance of each training parameter.
+Lasso helps by zeroing out less important features, improving model accuracy with many input variables.
 - This alone is not enough, because electricity prices are not linear.
 E.g. low wind&solar leads to gas power plants being turned on, and due to merit order pricing, electricity prices explode.
-- Therefore, we then multiply each parameter with its weight (LinReg factor) to get a "normalized" data set.
-- In the next step, we use a KNN (k=3) approach to find hours in the past with similar properties and use that to determine the final price.
+- Therefore, we then multiply each parameter with its weight (Lasso coefficients) to get a "normalized" data set.
+- In the next step, we use a KNN (k=7) approach to find hours in the past with similar properties and use that to determine the final price.
 
 ## Model performance
 For performance testing, we used historical weather data with a 90%/10% split for a training/testing data set. See `predictor/model/performance_testing.py`.
 
 Results:\
-DE: Mean squared error ~4.8 ct/kWh, mean absolute error ~1.3 ct/kWh\
-AT: Mean squared error ~5.9 ct/kWh, mean absolute error ~1.5 ct/kWh\
-BE: Mean squared error ~3.1 ct/kWh, mean absolute error ~1.2 ct/kWh\
-NL: Mean squared error ~4.0 ct/kWh, mean absolute error ~1.3 ct/kWh
+DE: Mean squared error ~1.4 ct/kWh, mean absolute error ~0.7 ct/kWh\
+AT: Mean squared error ~1.9 ct/kWh, mean absolute error ~0.8 ct/kWh\
+BE: Mean squared error ~2.0 ct/kWh, mean absolute error ~0.9 ct/kWh\
+NL: Mean squared error ~2.0 ct/kWh, mean absolute error ~0.9 ct/kWh
 
 Some observations:
-- At night, predictions are usually within 1-2ct/kWh
-- Morning/Evening peaks are usually within 3-4ct/kWh
-- Extreme peaks due to "Dunkelflaute" are correctly detected, but estimation of the exact price is a challange. E.g.
+- At night, predictions are usually within 0.5-1ct/kWh
+- Morning/Evening peaks are usually within 1-2ct/kWh
+- Extreme peaks due to "Dunkelflaute" are correctly detected, but estimation of the exact price is a challenge. E.g.
 the model might predict 75ct, while in reality it's only 60ct or vice versa
-- High PV noons are usually correctly detected. Sometimes it will return 3ct instead of -1ct, but the ballpark is usually correct.
+- High PV noons are usually correctly detected with good accuracy.
 
 This graph compares the actual prices to the ones returned by the model for a random two week time period in early 2025.
 
