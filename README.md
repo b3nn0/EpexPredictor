@@ -19,7 +19,7 @@ Supported Countries:
 - Maybe package it directly as a Home Assistant Add-on
 
 ## The Model
-We sample a few sample points all over the country and fetch hourly [Weather data from Open-Meteo.com](https://open-meteo.com/) for those for the past n days (default n=90).
+We sample multiple locations distributed across each country, including offshore North Sea locations for coastal countries (DE, NL, BE) to capture offshore wind farm production. We fetch hourly [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=90).
 This serves as the main data source.
 Price data is provided under CC BY 4.0 by smartd.de, retrieved via https://api.energy-charts.info/.
 
@@ -51,17 +51,18 @@ E.g. low wind&solar leads to gas power plants being turned on, and due to merit 
 For performance testing, we used historical weather data with a 90%/10% split for a training/testing data set. See `predictor/model/performance_testing.py`.
 
 Results:\
-DE: Mean squared error ~1.4 ct/kWh, mean absolute error ~0.7 ct/kWh\
+DE: Mean squared error ~1.3 ct/kWh, mean absolute error ~0.6 ct/kWh\
 AT: Mean squared error ~1.9 ct/kWh, mean absolute error ~0.8 ct/kWh\
-BE: Mean squared error ~2.0 ct/kWh, mean absolute error ~0.9 ct/kWh\
-NL: Mean squared error ~2.0 ct/kWh, mean absolute error ~0.9 ct/kWh
+BE: Mean squared error ~1.7 ct/kWh, mean absolute error ~0.8 ct/kWh\
+NL: Mean squared error ~1.9 ct/kWh, mean absolute error ~0.8 ct/kWh
 
 Some observations:
-- At night, predictions are usually within 0.5-1ct/kWh
-- Morning/Evening peaks are usually within 1-2ct/kWh
+- At night, predictions are typically within 0.5ct/kWh
+- Morning/Evening peaks are typically within 1-1.5ct/kWh
 - Extreme peaks due to "Dunkelflaute" are correctly detected, but estimation of the exact price is a challenge. E.g.
 the model might predict 75ct, while in reality it's only 60ct or vice versa
 - High PV noons are usually correctly detected with good accuracy.
+- Offshore wind data significantly improves prediction accuracy for coastal countries (BE, NL, DE)
 
 This graph compares the actual prices to the ones returned by the model for a random two week time period in early 2025.
 
