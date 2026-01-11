@@ -37,7 +37,7 @@ class AuxDataStore(DataStore):
 
         for rstart, rend in self.gen_missing_date_ranges(start, end):
             log.info(f"computing aux data from {rstart.isoformat()} to {rend.isoformat()}")
-            df = pd.DataFrame(data={"time": [pd.to_datetime(start, utc=True), pd.to_datetime(end, utc=True)]})
+            df = pd.DataFrame(data={"time": [pd.to_datetime(rstart, utc=True), pd.to_datetime(rend, utc=True)]})
             df.set_index("time", inplace=True)
             df = df.resample('15min').ffill()
             df.reset_index(inplace=True)
