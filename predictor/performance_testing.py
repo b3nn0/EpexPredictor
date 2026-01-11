@@ -5,16 +5,16 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-import pandas as pd
-from predictor.model.auxdatastore import AuxDataStore
-import predictor.model.pricepredictor as pred
-from predictor.model.priceregion import *
-from predictor.model.pricestore import PriceStore
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from predictor.model.weatherstore import WeatherStore
+
+import model.pricepredictor as pred
+from model.auxdatastore import AuxDataStore
+from model.priceregion import *
+from model.pricestore import PriceStore
+from model.weatherstore import WeatherStore
 
 START: datetime = datetime.fromisoformat("2025-01-01T00:00:00Z")
-END: datetime = datetime.fromisoformat("2026-01-10T00:00:00Z")
+END: datetime = datetime.fromisoformat("2026-01-11T00:00:00Z")
 REGION : PriceRegion = PriceRegion.DE
 LEARN_DAYS : int = 90
 

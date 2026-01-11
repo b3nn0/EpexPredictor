@@ -62,7 +62,7 @@ class PriceStore(DataStore):
         return updated
 
     def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
-        start = start.replace(minute=0, second=0, microsecond=0)
+        start = start.replace(hour=12, minute=0, second=0, microsecond=0)
 
         curr = start
 

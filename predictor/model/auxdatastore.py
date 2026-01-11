@@ -36,7 +36,11 @@ class AuxDataStore(DataStore):
         tzlocal = pytz.timezone(self.region.timezone)
 
         for rstart, rend in self.gen_missing_date_ranges(start, end):
+            # make it full day to be sure
+            rstart = rstart.replace(hour=0, minute=0, second=0, microsecond=0)
+            rend = rend.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
             log.info(f"computing aux data from {rstart.isoformat()} to {rend.isoformat()}")
+
             df = pd.DataFrame(data={"time": [pd.to_datetime(rstart, utc=True), pd.to_datetime(rend, utc=True)]})
             df.set_index("time", inplace=True)
             df = df.resample('15min').ffill()
@@ -79,7 +83,7 @@ class AuxDataStore(DataStore):
         return updated
 
     def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
-        start = start.replace(minute=0, second=0, microsecond=0)
+        start = start.replace(hour=12, minute=0, second=0, microsecond=0)
 
         curr = start
 

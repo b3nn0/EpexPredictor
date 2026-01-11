@@ -96,8 +96,8 @@ class WeatherStore(DataStore):
     def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
         # a random hour of the day so we can easily check if we already have that day.
         # OpenMeteo only has full day queries anyway.
-        start = start.replace(minute=0, second=0, microsecond=0)
-        end = end.replace(minute=0, second=0, microsecond=0)
+        start = start.replace(hour=12, minute=0, second=0, microsecond=0)
+        end = end.replace(hour=12, minute=0, second=0, microsecond=0)
 
         curr = start
 

@@ -58,7 +58,7 @@ class DataStore:
     def _update_data(self, df : pd.DataFrame):
         # TODO: isn't there a nicer way to do this?
         self.data = pd.concat([self.data, df.dropna()]).dropna()
-        self.data = self.data.reset_index().drop_duplicates(subset='time', keep='last').set_index("time")
+        self.data = self.data.reset_index().drop_duplicates(subset='time', keep='last').set_index("time").sort_index()
 
 
     def get_storage_file(self):
@@ -81,6 +81,7 @@ class DataStore:
             self.data = pd.read_json(fn, compression='gzip')
             self.data.index = self.data.index.tz_localize("UTC") # type: ignore
             self.data.index.set_names("time", inplace=True)
+            self.data.dropna(inplace=True)
 
 
 
