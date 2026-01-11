@@ -14,7 +14,7 @@
                 "--reload"
             ],
             "env": {
-                "USE_PERSISTENT_TEST_DATA": "true"
+                "EPEXPREDICTOR_DATADIR": "."
             },
             "jinja": true
         },
@@ -26,7 +26,7 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "USE_PERSISTENT_TEST_DATA": "true"
+                "EPEXPREDICTOR_DATADIR": ".",
             },
         }
     ]

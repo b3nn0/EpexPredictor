@@ -1,6 +1,5 @@
-prices_*.json
-solar_*.json
-weather_*.json
+*.json.gz
+data/
 
 
 # Byte-compiled / optimized / DLL files

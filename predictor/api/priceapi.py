@@ -1,18 +1,18 @@
-import logging
-import sys
-import os
 import asyncio
-from typing import Dict, List
-from enum import Enum
 import bisect
+import logging
+import os
+import sys
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from typing import Dict, List
 
-from pydantic import BaseModel
 import pytz
 from fastapi import FastAPI, Query
 from fastapi.responses import RedirectResponse
-import datetime
+from pydantic import BaseModel
 
-from predictor.model.pricepredictor import Country
+from predictor.model.priceregion import PriceRegion, PriceRegionName
 
 app = FastAPI(title="EPEX day-ahead prediction API", description="""
 API can be used free of charge on a fair use premise.
@@ -45,8 +45,11 @@ def api_docs():
 
 
 USE_PERSISTENT_TESTDATA = os.getenv("USE_PERSISTENT_TEST_DATA", "false").lower() in ("yes", "true", "t", "1")
+EPEXPREDICTOR_DATADIR = os.getenv("EPEXPREDICTOR_DATADIR")
+TRAINING_DAYS = 90
 
 import predictor.model.pricepredictor as pp
+
 
 class PriceUnit(str, Enum):
     CT_PER_KWH = "CT_PER_KWH" #1.0
@@ -65,7 +68,7 @@ class OutputFormat(str, Enum):
     SHORT = "SHORT"
 
 class PriceModel(BaseModel):
-    startsAt : datetime.datetime
+    startsAt : datetime
     total: float
 
 class PricesModelShort(BaseModel):
@@ -74,27 +77,27 @@ class PricesModelShort(BaseModel):
 
 class PricesModel(BaseModel):
     prices : list[PriceModel]
-    knownUntil: datetime.datetime
+    knownUntil: datetime
 
 
     
-class CountryPrices:
+class RegionPriceManager:
     predictor : pp.PricePredictor
 
-    last_weather_update : datetime.datetime = datetime.datetime(1980, 1, 1)
-    last_price_update : datetime.datetime = datetime.datetime(1980, 1, 1)
+    last_weather_update : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
+    last_price_update : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
 
-    last_known_price : tuple[datetime.datetime, float] = (datetime.datetime.now(), 0)
+    last_known_price : tuple[datetime, float] = (datetime.now(timezone.utc), 0)
 
-    cachedprices : Dict[datetime.datetime, float] = {}
-    cachedeval : Dict[datetime.datetime, float] = {}
+    cachedprices : Dict[datetime, float] = {}
+    cachedeval : Dict[datetime, float] = {}
 
     updateTask : asyncio.Task | None = None
 
-    def __init__(self, country : Country):
-        self.predictor =  pp.PricePredictor(country, testdata=USE_PERSISTENT_TESTDATA)
+    def __init__(self, region : PriceRegion):
+        self.predictor =  pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
 
-    async def prices(self, hours : int = -1, fixedPrice : float = 0.0, taxPercent : float = 0.0, startTs : datetime.datetime|None = None,
+    async def prices(self, hours : int = -1, fixedPrice : float = 0.0, taxPercent : float = 0.0, startTs : datetime|None = None,
                     unit : PriceUnit = PriceUnit.CT_PER_KWH, evaluation : bool = False, hourly : bool = False,
                     timezone : str = "Europe/Berlin", format : OutputFormat = OutputFormat.LONG) -> PricesModel | PricesModelShort:
 
@@ -103,14 +106,14 @@ class CountryPrices:
         tz = pytz.timezone(timezone)
 
         if startTs is None:
-            startTs = datetime.datetime.now(tz=tz)
+            startTs = datetime.now(tz=tz)
         else:
             if startTs.tzinfo is None:
                 startTs = startTs.astimezone(tz)
         
-        endTs = datetime.datetime(2999, 1, 1, tzinfo=tz)
+        endTs = datetime(2999, 1, 1, tzinfo=tz)
         if hours >= 0:
-            endTs = startTs + datetime.timedelta(hours=hours)
+            endTs = startTs + timedelta(hours=hours)
 
         prediction = self.cachedprices if evaluation is False else self.cachedeval
 
@@ -153,8 +156,8 @@ class CountryPrices:
         
     def format_short(self, prices : List[PriceModel]) -> PricesModelShort:
         return PricesModelShort(
-            s=map(lambda p: p.startsAt.timestamp(), prices),
-            t=map(lambda p: round(p.total, 4), prices)
+            s=list(map(lambda p: round(p.startsAt.timestamp()), prices)),
+            t=list(map(lambda p: round(p.total, 4), prices))
         )
 
 
@@ -168,7 +171,7 @@ class CountryPrices:
 
     async def update_data_if_needed(self):
         try:
-            currts = datetime.datetime.now()
+            currts = datetime.now(timezone.utc)
 
             price_age = currts - self.last_price_update
             weather_age = currts - self.last_weather_update
@@ -178,7 +181,7 @@ class CountryPrices:
             # Update prices every 12 hours. If it's after 13:00 local, and we don't have prices for the next day yet, update every 5 minutes
             latest_price = self.predictor.get_last_known_price()
             price_update_frequency = 12 * 60 * 60
-            if latest_price is None or (latest_price[0] - datetime.datetime.now(pytz.UTC)).total_seconds() <= 60 * 60 * 11:
+            if latest_price is None or (latest_price[0] - datetime.now(timezone.utc)).total_seconds() <= 60 * 60 * 11:
                 price_update_frequency = 5 * 60
 
             retrain = False
@@ -187,19 +190,27 @@ class CountryPrices:
                 self.last_price_update = currts
                 retrain = True
 
-            if weather_age.total_seconds() > 60 * 60 * 6: # update weather every 6 hours
-                await self.predictor.refresh_forecasts()
+            if weather_age.total_seconds() > 60 * 60 * 3: # update weather every 3 hours
+                start = datetime.now(timezone.utc) - timedelta(days=1)
+                end = datetime.now(timezone.utc) + timedelta(days=8)
+                await self.predictor.refresh_weather(start, end)
                 self.last_weather_update = currts
                 retrain = True
 
             if retrain:
-                await self.predictor.train()
-                newprices, neweval = await self.predictor.predict(), await self.predictor.predict(estimateAll=True)
-                self.cachedprices = newprices
-                self.cachedeval = neweval
+                train_start = datetime.now(timezone.utc) - timedelta(days=TRAINING_DAYS)
+                train_end = datetime.now(timezone.utc) + timedelta(days=7) # will ensure all weather data is fetched immediately, not partially for training and then partially for prediction
+                
+               
+                await self.predictor.train(train_start, train_end)
+                newprices, neweval = await self.predictor.predict(train_start, train_end), await self.predictor.predict(train_start, train_end, fill_known=False)
+                self.cachedprices = self.predictor.to_price_dict(newprices)
+                self.cachedeval = self.predictor.to_price_dict(neweval)
                 lastknown = self.predictor.get_last_known_price()
                 if lastknown is not None:
                     self.last_known_price = lastknown
+
+                self.predictor.cleanup()
 
         finally:
             self.updateTask = None
@@ -207,20 +218,17 @@ class CountryPrices:
 
 
 class Prices:
-    countryPrices : Dict[Country, CountryPrices] = {
-        Country.DE: CountryPrices(Country.DE),
-        Country.AT: CountryPrices(Country.AT),
-        Country.BE: CountryPrices(Country.BE),
-        Country.NL: CountryPrices(Country.NL),
-    }
+    regionPrices : Dict[PriceRegion, RegionPriceManager] = {}
 
     def __init__(self):
         pass
 
-    async def prices(self, hours : int = -1, fixedPrice : float = 0.0, taxPercent : float = 0.0, startTs : datetime.datetime|None = None,
-                    country : Country = Country.DE, unit : PriceUnit = PriceUnit.CT_PER_KWH, evaluation : bool = False, hourly : bool = False,
+    async def prices(self, hours : int = -1, fixedPrice : float = 0.0, taxPercent : float = 0.0, startTs : datetime|None = None,
+                    region : PriceRegion = PriceRegion.DE, unit : PriceUnit = PriceUnit.CT_PER_KWH, evaluation : bool = False, hourly : bool = False,
                     timezone : str = "Europe/Berlin", format : OutputFormat = OutputFormat.LONG):
-        return await self.countryPrices[country].prices(hours,fixedPrice, taxPercent, startTs, unit, evaluation, hourly, timezone, format)
+        if region not in self.regionPrices:
+            self.regionPrices[region] = RegionPriceManager(region)
+        return await self.regionPrices[region].prices(hours,fixedPrice, taxPercent, startTs, unit, evaluation, hourly, timezone, format)
 
 
 pricesHandler = Prices()
@@ -229,8 +237,8 @@ async def get_prices(
     hours : int = Query(-1, description="How many hours to predict"),
     fixedPrice : float = Query(0.0, description="Add this fixed amount to all prices (ct/kWh)"),
     taxPercent : float = Query(0.0, description="Tax % to add to the final price"),
-    startTs : datetime.datetime | None = Query(None, description="Start output from this time. At most ~90 days in the past"),
-    country : Country = Query(Country.DE, description="Country Code"),
+    startTs : datetime | None = Query(None, description="Start output from this time. At most ~90 days in the past"),
+    region : PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
     evaluation : bool = Query(False, description="Switches to evaluation mode. All values will be generated by the model, instead of only future values. Useful to evaluate model performance."),
     unit : PriceUnit = Query(PriceUnit.CT_PER_KWH, description="Unit of output"),
     hourly : bool = Query(False, description="Output hourly average prices (if your energy provider uses hourly prices)"),
@@ -238,15 +246,17 @@ async def get_prices(
     """
     Get price prediction - verbose output format with objects containing full ISO timestamp and price
     """
-    return await pricesHandler.prices(hours, fixedPrice, taxPercent, startTs, country, unit, evaluation, hourly, timezone, format=OutputFormat.LONG)
+    res = await pricesHandler.prices(hours, fixedPrice, taxPercent, startTs, region.to_region(), unit, evaluation, hourly, timezone, format=OutputFormat.LONG)
+    assert isinstance(res, PricesModel)
+    return res
 
 @app.get("/prices_short")
 async def get_prices_short(
     hours : int = Query(-1, description="How many hours to predict"),
     fixedPrice : float = Query(0.0, description="Add this fixed amount to all prices (ct/kWh)"),
     taxPercent : float = Query(0.0, description="Tax % to add to the final price"),
-    startTs : datetime.datetime | None = Query(None, description="Start output from this time. At most ~90 days in the past"),
-    country : Country = Query(Country.DE, description="Country Code"),
+    startTs : datetime | None = Query(None, description="Start output from this time. At most ~90 days in the past"),
+    region : PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
     evaluation : bool = Query(False, description="Switches to evaluation mode. All values will be generated by the model, instead of only future values. Useful to evaluate model performance."),
     unit : PriceUnit = Query(PriceUnit.CT_PER_KWH, description="Unit of output"),
     hourly : bool = Query(False, description="Output hourly average prices (if your energy provider uses hourly prices)"),
@@ -254,7 +264,9 @@ async def get_prices_short(
     """
     Get price prediction - short output format with unix timestamp array and price array
     """
-    return await pricesHandler.prices(hours, fixedPrice, taxPercent, startTs, country, unit, evaluation, hourly, timezone, format=OutputFormat.SHORT)
+    res = await pricesHandler.prices(hours, fixedPrice, taxPercent, startTs, region.to_region(), unit, evaluation, hourly, timezone, format=OutputFormat.SHORT)
+    assert isinstance(res, PricesModelShort)
+    return res
 
 
     

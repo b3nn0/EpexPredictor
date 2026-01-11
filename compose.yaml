@@ -1,8 +1,14 @@
 services:
   epexpredictor:
-    image: ghcr.io/b3nn0/epexpredictor:main # or :v0.0.1, ...
-    # build: .
+    #image: ghcr.io/b3nn0/epexpredictor:main # or :v0.0.1, ...
+    build: .
     # restart: unless-stopped
     ports:
       - "8000:80"
+
+    volumes:
+      - ./data:/data
+    
+    environment:
+      - EPEXPREDICTOR_DATADIR=/data/
 
