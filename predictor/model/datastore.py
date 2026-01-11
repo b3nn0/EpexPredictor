@@ -47,13 +47,11 @@ class DataStore:
         if self.data.empty:
             return
         self.data = self.data[self.data.index <= pd.to_datetime(dt, utc=True)]
-        self.serialize()
 
     def drop_before(self, dt: datetime):
         if self.data.empty:
             return
         self.data = self.data[self.data.index >= pd.to_datetime(dt, utc=True)]
-        self.serialize()
 
     def _update_data(self, df : pd.DataFrame):
         # TODO: isn't there a nicer way to do this?

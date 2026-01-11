@@ -18,7 +18,7 @@ async def main():
     )
 
     pred = PricePredictor(PriceRegion.DE, ".")
-    start = datetime.fromisoformat("2025-03-01T00:00:00Z")
+    start = datetime.fromisoformat("2025-10-05T00:00:00Z")
     end = start + timedelta(days=90)
     await pred.train(start, end)
 

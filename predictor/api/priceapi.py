@@ -186,9 +186,10 @@ class RegionPriceManager:
 
             retrain = False
             if price_age.total_seconds() > price_update_frequency:
-                await self.predictor.refresh_prices()
+                
                 self.last_price_update = currts
-                retrain = True
+                if await self.predictor.refresh_prices():
+                    retrain = True
 
             if weather_age.total_seconds() > 60 * 60 * 3: # update weather every 3 hours
                 start = datetime.now(timezone.utc) - timedelta(days=1)
