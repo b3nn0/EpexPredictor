@@ -20,10 +20,9 @@ class AuxDataStore(DataStore):
 
     data : pd.DataFrame
     region : PriceRegion
-    storage_dir : str|None
-    
 
-    def __init__(self, region : PriceRegion, storage_dir=None):
+
+    def __init__(self, region : PriceRegion, storage_dir: str | None = None):
         super().__init__(region)
 
 
@@ -45,7 +44,6 @@ class AuxDataStore(DataStore):
             df.set_index("time", inplace=True)
             df = df.resample('15min').ffill()
             df.reset_index(inplace=True)
-
 
             df["holiday"] = df["time"].apply(lambda t: self.is_holiday(t.astimezone(tzlocal)))
             for i in range(6):
@@ -108,9 +106,9 @@ class AuxDataStore(DataStore):
     def is_holiday(self, t : pd.Timestamp) -> float:
         if t.weekday() == 6:
             return 1
-        
+
         date = t.date()
-       
+
         cnt_holiday = 0
         for h in self.region.holidays:
             if date in h:
@@ -118,6 +116,7 @@ class AuxDataStore(DataStore):
         # Average regional holidays. E.g. if it's a holiday in half of the regions -> 0.5
         result = cnt_holiday / len(self.region.holidays)
         return result
+
 
 async def main():
     logging.basicConfig(

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import math
 import os
 from datetime import datetime, timedelta
 
@@ -16,7 +17,7 @@ from model.weatherstore import WeatherStore
 START: datetime = datetime.fromisoformat("2025-01-01T00:00:00Z")
 END: datetime = datetime.fromisoformat("2026-01-11T00:00:00Z")
 REGION : PriceRegion = PriceRegion.DE
-LEARN_DAYS : int = 90
+LEARN_DAYS : int = 120
 
 logging.basicConfig(
     format='%(message)s',
@@ -49,7 +50,7 @@ async def main():
     learn_start = START
     learn_end = learn_start + timedelta(days=LEARN_DAYS)
 
-    # MAE/MSE values for 1 to 3 day predictions
+    # MAE/RMSE values for 1 to 3 day predictions
     d1_mae = []
     d1_mse = []
     d2_mae = []
@@ -97,9 +98,9 @@ async def main():
 
 
     print(f"iterations tested: {iterations}")
-    print(f"1d: mean squared error={round(sum(d1_mse)/len(d1_mse), 2)}, mean absolute error = {round(sum(d1_mae)/len(d1_mae), 2)}")
-    print(f"2d: mean squared error={round(sum(d2_mse)/len(d2_mse), 2)}, mean absolute error = {round(sum(d2_mae)/len(d2_mae), 2)}")
-    print(f"3d: mean squared error={round(sum(d3_mse)/len(d3_mse), 2)}, mean absolute error = {round(sum(d3_mae)/len(d3_mae), 2)}")
+    print(f"1d: RMSE={round(math.sqrt(sum(d1_mse)/len(d1_mse)), 2)}, MAE={round(sum(d1_mae)/len(d1_mae), 2)}")
+    print(f"2d: RMSE={round(math.sqrt(sum(d2_mse)/len(d2_mse)), 2)}, MAE={round(sum(d2_mae)/len(d2_mae), 2)}")
+    print(f"3d: RMSE={round(math.sqrt(sum(d3_mse)/len(d3_mse)), 2)}, MAE={round(sum(d3_mae)/len(d3_mae), 2)}")
 
 
 

@@ -7,8 +7,7 @@ from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Dict, List, Tuple, cast
 
 import pandas as pd
-from sklearn.linear_model import LinearRegression
-from sklearn.neighbors import KNeighborsRegressor
+import lightgbm as lgb
 
 from .auxdatastore import AuxDataStore
 from .priceregion import *
@@ -22,27 +21,23 @@ class PricePredictor:
     region: PriceRegion
     weatherstore: WeatherStore
     pricestore: PriceStore
-    auxstore : AuxDataStore
+    auxstore: AuxDataStore
 
     traindata: pd.DataFrame | None = None
-    param_scaling_factors = None
 
-    predictor: KNeighborsRegressor | None = None
+    predictor: lgb.LGBMRegressor | None = None
 
-    def __init__(self, region: PriceRegion, storage_dir: str|None = None):
+    def __init__(self, region: PriceRegion, storage_dir: str | None = None):
         self.region = region
         self.weatherstore = WeatherStore(region, storage_dir)
         self.pricestore = PriceStore(region, storage_dir)
-        self.auxstore = AuxDataStore(region)
+        self.auxstore = AuxDataStore(region, storage_dir)
 
     def is_trained(self) -> bool:
         return self.predictor is not None
 
-    
-    async def train(self, start: datetime, end: datetime):
-        # To determine the importance of each parameter, we first weight them using Lasso regression
-        # Lasso (L1 regularization) helps by zeroing out less important features
 
+    async def train(self, start: datetime, end: datetime):
         self.traindata = await self.prepare_dataframe(start, end, True)
         if self.traindata is None:
             return
@@ -51,15 +46,14 @@ class PricePredictor:
         params = self.traindata.drop(columns=["price"])
         output = self.traindata["price"]
 
-        # Use Lasso regression for feature weighting (alpha=0.1 provides good regularization)
-        #reg = Lasso(alpha=0.1).fit(params, output)
-        reg = LinearRegression().fit(params, output)
-        self.param_scaling_factors = reg.coef_
-
-        # Apply same scaling to learning set and full data
-        params *= self.param_scaling_factors
-
-        self.predictor = KNeighborsRegressor(n_neighbors=7).fit(params, output)
+        self.predictor = lgb.LGBMRegressor(
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=6,
+            num_leaves=31,
+            verbosity=-1
+        )
+        self.predictor.fit(params, output)
 
 
 
@@ -72,11 +66,10 @@ class PricePredictor:
         prices_known = df["price"]
 
         params = df.drop(columns=["price"])
-        params *= self.param_scaling_factors
 
         resultdf = pd.DataFrame(index=params.index)
         resultdf["price"] = self.predictor.predict(params)
-        
+
         if fill_known:
             resultdf.update(prices_known)
 
@@ -101,8 +94,24 @@ class PricePredictor:
         else:
             prices = self.pricestore.get_known_data(start, end)
         auxdata = await self.auxstore.get_data(start, end)
-        
-        df = pd.concat([weather, auxdata], axis=1).dropna()
+
+        # Get extended price history for lagged features (need 7+ days before start)
+        lag_start = start - timedelta(days=8)
+        historical_prices = self.pricestore.get_known_data(lag_start, end)
+
+        # Add lagged price features
+        periods_1d = 96  # 24 hours * 4 (15-min intervals)
+        periods_7d = 96 * 7
+
+        historical_prices = historical_prices.copy()
+        # Only use lagged features that look back 1+ days (no leakage possible)
+        historical_prices["price_lag_1d"] = historical_prices["price"].shift(periods_1d)
+        historical_prices["price_lag_7d"] = historical_prices["price"].shift(periods_7d)
+
+        # Extract just the lagged features for our date range
+        lagged_features = historical_prices[["price_lag_1d", "price_lag_7d"]].loc[start:end]
+
+        df = pd.concat([weather, auxdata, lagged_features], axis=1).dropna()
         df = pd.concat([df, prices], axis=1)
         return df
 

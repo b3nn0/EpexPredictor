@@ -5,3 +5,4 @@ numpy
 aiohttp
 astral
 fastapi[standard]
+lightgbm
