@@ -110,6 +110,8 @@ class PricePredictor:
 
         # Extract just the lagged features for our date range
         lagged_features = historical_prices[["price_lag_1d", "price_lag_7d"]].loc[start:end]
+        # Forward-fill lagged features for future predictions where historical prices don't exist yet
+        lagged_features = lagged_features.ffill()
 
         df = pd.concat([weather, auxdata, lagged_features], axis=1).dropna()
         df = pd.concat([df, prices], axis=1)
