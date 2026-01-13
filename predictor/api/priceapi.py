@@ -2,7 +2,6 @@ import asyncio
 import bisect
 import logging
 import os
-import sys
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List
@@ -13,6 +12,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from predictor.model.priceregion import PriceRegion, PriceRegionName
+import predictor.model.pricepredictor as pp
 
 app = FastAPI(title="EPEX day-ahead prediction API", description="""
 API can be used free of charge on a fair use premise.
@@ -47,8 +47,7 @@ def api_docs():
 USE_PERSISTENT_TESTDATA = os.getenv("USE_PERSISTENT_TEST_DATA", "false").lower() in ("yes", "true", "t", "1")
 EPEXPREDICTOR_DATADIR = os.getenv("EPEXPREDICTOR_DATADIR")
 TRAINING_DAYS = 120
-
-import predictor.model.pricepredictor as pp
+DEFAULT_TIMEZONE = "Europe/Berlin"
 
 
 class PriceUnit(str, Enum):
@@ -68,16 +67,16 @@ class OutputFormat(str, Enum):
     SHORT = "SHORT"
 
 class PriceModel(BaseModel):
-    startsAt : datetime
+    starts_at: datetime
     total: float
 
 class PricesModelShort(BaseModel):
-    s : list[int]
-    t : list[float]
+    s: list[int]
+    t: list[float]
 
 class PricesModel(BaseModel):
-    prices : list[PriceModel]
-    knownUntil: datetime
+    prices: list[PriceModel]
+    known_until: datetime
 
 
     
@@ -92,30 +91,30 @@ class RegionPriceManager:
     cachedprices : Dict[datetime, float] = {}
     cachedeval : Dict[datetime, float] = {}
 
-    updateTask : asyncio.Task | None = None
+    update_task: asyncio.Task | None = None
 
-    def __init__(self, region : PriceRegion):
-        self.predictor =  pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
+    def __init__(self, region: PriceRegion):
+        self.predictor = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
 
-    async def prices(self, hours : int = -1, fixedPrice : float = 0.0, taxPercent : float = 0.0, startTs : datetime|None = None,
-                    unit : PriceUnit = PriceUnit.CT_PER_KWH, evaluation : bool = False, hourly : bool = False,
-                    timezone : str = "Europe/Berlin", format : OutputFormat = OutputFormat.LONG) -> PricesModel | PricesModelShort:
+    async def prices(self, hours: int = -1, fixed_price: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
+                    unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
+                    timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG) -> PricesModel | PricesModelShort:
 
         await self.update_in_background()
 
         tz = pytz.timezone(timezone)
 
-        if startTs is None:
-            startTs = datetime.now(tz=tz)
+        if start_ts is None:
+            start_ts = datetime.now(tz=tz)
         else:
-            if startTs.tzinfo is None:
-                startTs = startTs.astimezone(tz)
-        
-        endTs = datetime(2999, 1, 1, tzinfo=tz)
-        if hours >= 0:
-            endTs = startTs + timedelta(hours=hours)
+            if start_ts.tzinfo is None:
+                start_ts = start_ts.astimezone(tz)
 
-        prediction = self.cachedprices if evaluation is False else self.cachedeval
+        end_ts = tz.localize(datetime(2999, 1, 1))
+        if hours >= 0:
+            end_ts = start_ts + timedelta(hours=hours)
+
+        prediction = self.cachedeval if evaluation else self.cachedprices
 
         # Calculate hourly averages if hourly mode is enabled
         if hourly:
@@ -123,50 +122,50 @@ class RegionPriceManager:
             for dt in sorted(prediction.keys()):
                 dt_local = dt.astimezone(tz)
                 hour_key = dt_local.replace(minute=0, second=0, microsecond=0)
-                
+
                 if hour_key not in hourly_averages:
                     hourly_averages[hour_key] = []
                 hourly_averages[hour_key].append(prediction[dt])
-            
+
             # Replace prediction with hourly averages, skipping empty lists to avoid division by zero
             prediction = {hour_dt: sum(prices) / len(prices) for hour_dt, prices in hourly_averages.items() if len(prices) > 0}
 
 
-        prices : list[PriceModel] = []
+        prices: list[PriceModel] = []
 
-        dts = list(sorted(prediction.keys()))
-        startindex = max(0, bisect.bisect_right(dts, startTs) - 1)
-        endindex = min(len(dts)-1, bisect.bisect_right(dts, endTs))
-        for dt in dts[startindex:endindex]:
+        dts = sorted(prediction.keys())
+        start_index = max(0, bisect.bisect_right(dts, start_ts) - 1)
+        end_index = min(len(dts) - 1, bisect.bisect_right(dts, end_ts))
+        for dt in dts[start_index:end_index]:
             price = prediction[dt]
-            total = (price + fixedPrice) * (1 + taxPercent / 100.0)
+            total = (price + fixed_price) * (1 + tax_percent / 100.0)
             total = unit.convert(total)
             dt = dt.astimezone(tz)
 
-            prices.append(PriceModel(startsAt=dt, total=round(total, 4)))
+            prices.append(PriceModel(starts_at=dt, total=round(total, 4)))
 
         if format == OutputFormat.SHORT:
             return self.format_short(prices)
         else:
             return PricesModel(
-                prices = prices,
-                knownUntil = self.last_known_price[0].astimezone(tz)
+                prices=prices,
+                known_until=self.last_known_price[0].astimezone(tz)
             )
 
         
-    def format_short(self, prices : List[PriceModel]) -> PricesModelShort:
+    def format_short(self, prices: List[PriceModel]) -> PricesModelShort:
         return PricesModelShort(
-            s=list(map(lambda p: round(p.startsAt.timestamp()), prices)),
-            t=list(map(lambda p: round(p.total, 4), prices))
+            s=[round(p.starts_at.timestamp()) for p in prices],
+            t=[round(p.total, 4) for p in prices]
         )
 
 
     async def update_in_background(self):
-        if self.updateTask is None:
-            self.updateTask = asyncio.create_task(self.update_data_if_needed())
+        if self.update_task is None:
+            self.update_task = asyncio.create_task(self.update_data_if_needed())
         
         if len(self.cachedprices) == 0:
-            await self.updateTask # sync refresh on first call
+            await self.update_task # sync refresh on first call
 
 
     async def update_data_if_needed(self):
@@ -217,58 +216,58 @@ class RegionPriceManager:
                 self.predictor.cleanup()
 
         finally:
-            self.updateTask = None
+            self.update_task = None
 
 
 
 class Prices:
-    regionPrices : Dict[PriceRegion, RegionPriceManager] = {}
+    region_prices: Dict[PriceRegion, RegionPriceManager] = {}
 
-    def __init__(self):
-        pass
-
-    async def prices(self, hours : int = -1, fixedPrice : float = 0.0, taxPercent : float = 0.0, startTs : datetime|None = None,
-                    region : PriceRegion = PriceRegion.DE, unit : PriceUnit = PriceUnit.CT_PER_KWH, evaluation : bool = False, hourly : bool = False,
-                    timezone : str = "Europe/Berlin", format : OutputFormat = OutputFormat.LONG):
-        if region not in self.regionPrices:
-            self.regionPrices[region] = RegionPriceManager(region)
-        return await self.regionPrices[region].prices(hours,fixedPrice, taxPercent, startTs, unit, evaluation, hourly, timezone, format)
+    async def prices(self, hours: int = -1, fixed_price: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
+                    region: PriceRegion = PriceRegion.DE, unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
+                    timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG):
+        if region not in self.region_prices:
+            self.region_prices[region] = RegionPriceManager(region)
+        return await self.region_prices[region].prices(hours, fixed_price, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
 
 
-pricesHandler = Prices()
+prices_handler = Prices()
+
+
 @app.get("/prices")
 async def get_prices(
-    hours : int = Query(-1, description="How many hours to predict"),
-    fixedPrice : float = Query(0.0, description="Add this fixed amount to all prices (ct/kWh)"),
-    taxPercent : float = Query(0.0, description="Tax % to add to the final price"),
-    startTs : datetime | None = Query(None, description="Start output from this time. At most ~90 days in the past"),
-    region : PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
-    evaluation : bool = Query(False, description="Switches to evaluation mode. All values will be generated by the model, instead of only future values. Useful to evaluate model performance."),
-    unit : PriceUnit = Query(PriceUnit.CT_PER_KWH, description="Unit of output"),
-    hourly : bool = Query(False, description="Output hourly average prices (if your energy provider uses hourly prices)"),
-    timezone : str = Query("Europe/Berlin", description="Timezone for startTs and output timestamps. Default is Europe/Berlin")) -> PricesModel:
+    hours: int = Query(-1, description="How many hours to predict"),
+    fixed_price: float = Query(0.0, description="Add this fixed amount to all prices (ct/kWh)", alias="fixedPrice"),
+    tax_percent: float = Query(0.0, description="Tax % to add to the final price", alias="taxPercent"),
+    start_ts: datetime | None = Query(None, description="Start output from this time. At most ~90 days in the past", alias="startTs"),
+    region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
+    evaluation: bool = Query(False, description="Switches to evaluation mode. All values will be generated by the model, instead of only future values. Useful to evaluate model performance."),
+    unit: PriceUnit = Query(PriceUnit.CT_PER_KWH, description="Unit of output"),
+    hourly: bool = Query(False, description="Output hourly average prices (if your energy provider uses hourly prices)"),
+    timezone: str = Query(DEFAULT_TIMEZONE, description=f"Timezone for startTs and output timestamps. Default is {DEFAULT_TIMEZONE}")) -> PricesModel:
     """
     Get price prediction - verbose output format with objects containing full ISO timestamp and price
     """
-    res = await pricesHandler.prices(hours, fixedPrice, taxPercent, startTs, region.to_region(), unit, evaluation, hourly, timezone, format=OutputFormat.LONG)
+    res = await prices_handler.prices(hours, fixed_price, tax_percent, start_ts, region.to_region(), unit, evaluation, hourly, timezone, format=OutputFormat.LONG)
     assert isinstance(res, PricesModel)
     return res
 
+
 @app.get("/prices_short")
 async def get_prices_short(
-    hours : int = Query(-1, description="How many hours to predict"),
-    fixedPrice : float = Query(0.0, description="Add this fixed amount to all prices (ct/kWh)"),
-    taxPercent : float = Query(0.0, description="Tax % to add to the final price"),
-    startTs : datetime | None = Query(None, description="Start output from this time. At most ~90 days in the past"),
-    region : PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
-    evaluation : bool = Query(False, description="Switches to evaluation mode. All values will be generated by the model, instead of only future values. Useful to evaluate model performance."),
-    unit : PriceUnit = Query(PriceUnit.CT_PER_KWH, description="Unit of output"),
-    hourly : bool = Query(False, description="Output hourly average prices (if your energy provider uses hourly prices)"),
-    timezone : str = Query("Europe/Berlin", description="Timezone for startTs and output timestamps. Default is Europe/Berlin")) -> PricesModelShort:
+    hours: int = Query(-1, description="How many hours to predict"),
+    fixed_price: float = Query(0.0, description="Add this fixed amount to all prices (ct/kWh)", alias="fixedPrice"),
+    tax_percent: float = Query(0.0, description="Tax % to add to the final price", alias="taxPercent"),
+    start_ts: datetime | None = Query(None, description="Start output from this time. At most ~90 days in the past", alias="startTs"),
+    region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
+    evaluation: bool = Query(False, description="Switches to evaluation mode. All values will be generated by the model, instead of only future values. Useful to evaluate model performance."),
+    unit: PriceUnit = Query(PriceUnit.CT_PER_KWH, description="Unit of output"),
+    hourly: bool = Query(False, description="Output hourly average prices (if your energy provider uses hourly prices)"),
+    timezone: str = Query(DEFAULT_TIMEZONE, description=f"Timezone for startTs and output timestamps. Default is {DEFAULT_TIMEZONE}")) -> PricesModelShort:
     """
     Get price prediction - short output format with unix timestamp array and price array
     """
-    res = await pricesHandler.prices(hours, fixedPrice, taxPercent, startTs, region.to_region(), unit, evaluation, hourly, timezone, format=OutputFormat.SHORT)
+    res = await prices_handler.prices(hours, fixed_price, tax_percent, start_ts, region.to_region(), unit, evaluation, hourly, timezone, format=OutputFormat.SHORT)
     assert isinstance(res, PricesModelShort)
     return res
 

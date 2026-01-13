@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime, timedelta, timezone, tzinfo
 import statistics
-from typing import Generator
+from typing import Generator, cast
 
 from astral import LocationInfo, sun
 import pandas as pd
 import pytz
 from .datastore import DataStore
-from .priceregion import *
+from .priceregion import PriceRegion
 
 
 log = logging.getLogger(__name__)
@@ -42,26 +42,26 @@ class AuxDataStore(DataStore):
 
             df = pd.DataFrame(data={"time": [pd.to_datetime(rstart, utc=True), pd.to_datetime(rend, utc=True)]})
             df.set_index("time", inplace=True)
-            df = df.resample('15min').ffill()
+            df = cast(pd.DataFrame, df.resample('15min').ffill())
             df.reset_index(inplace=True)
 
             df["holiday"] = df["time"].apply(lambda t: self.is_holiday(t.astimezone(tzlocal)))
             for i in range(6):
-                df[f"day_{i}"] = df["time"].apply(lambda t: 1 if t.astimezone(tzlocal).weekday() == i else 0)
+                df[f"day_{i}"] = df["time"].apply(lambda t, i=i: 1 if t.astimezone(tzlocal).weekday() == i else 0)
             
             timecols : list[pd.Series|pd.DataFrame] = []
-            for h in range(0, 24):
+            for h in range(24):
                 for m in range(0, 60, 15):
-                    col = df["time"].apply(lambda t: self.is_timestamp(tzlocal, t, h, m))
+                    col = df["time"].apply(lambda t, h=h, m=m: self.is_timestamp(tzlocal, t, h, m))
                     col.name = f"i_{h}_{m}"
                     timecols.append(col)
             
             locinfo = LocationInfo(name=self.region.country_code, region=self.region.country_code, timezone=self.region.timezone, latitude=statistics.mean(self.region.latitudes), longitude=statistics.mean(self.region.longitudes))
-            sr_influence = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunrise"]).total_seconds() / 60)))
+            sr_influence = df["time"].apply(lambda t, loc=locinfo: min(180, abs((t - sun.sun(loc.observer, date=t)["sunrise"]).total_seconds() / 60)))
             sr_influence.name = "sr_influence"
             timecols.append(sr_influence)
 
-            ss_influence = df["time"].apply(lambda t: min(180, abs((t - sun.sun(locinfo.observer, date=t)["sunset"]).total_seconds() / 60)))
+            ss_influence = df["time"].apply(lambda t, loc=locinfo: min(180, abs((t - sun.sun(loc.observer, date=t)["sunset"]).total_seconds() / 60)))
             ss_influence.name = "ss_influence"
             timecols.append(ss_influence)
 
@@ -87,16 +87,16 @@ class AuxDataStore(DataStore):
 
         rangestart = None
         while curr <= end:
-            next = curr + timedelta(days=1)
+            next_day = curr + timedelta(days=1)
 
-            if rangestart is not None and (next in self.data.index or next > end):
+            if rangestart is not None and (next_day in self.data.index or next_day > end):
                 yield (rangestart, curr)
                 rangestart = None
 
             if rangestart is None and curr not in self.data.index:
                 rangestart = curr
 
-            curr = next
+            curr = next_day
 
 
     def is_timestamp(self, tz : tzinfo, t : datetime, h : int, m : int) -> int:
@@ -109,39 +109,6 @@ class AuxDataStore(DataStore):
 
         date = t.date()
 
-        cnt_holiday = 0
-        for h in self.region.holidays:
-            if date in h:
-                cnt_holiday += 1
-        # Average regional holidays. E.g. if it's a holiday in half of the regions -> 0.5
-        result = cnt_holiday / len(self.region.holidays)
-        return result
-
-
-async def main():
-    logging.basicConfig(
-        format='%(message)s',
-        level=logging.INFO
-    )
-    store = AuxDataStore(PriceRegion.DE)
-    d1 = await store.get_data(datetime.fromisoformat("2026-01-10T00:10:00Z"), datetime.fromisoformat("2026-01-12T00:00:00Z"))
-    print(d1)
-    d2 = await store.get_data(datetime.fromisoformat("2025-01-10T00:00:00Z"), datetime.fromisoformat("2025-01-12T00:00:00Z"))
-    print(d2)
-
-    histstart = datetime.now() - timedelta(days=63)
-    forecastend = datetime.now() - timedelta(days=57)
-    d3 = await store.get_data(histstart, forecastend)
-    print(d3)
-
-    # part of range already present -> 2 queries
-    d4 = await store.get_data(datetime.fromisoformat("2026-01-08T00:00:00Z"), datetime.fromisoformat("2026-01-14T00:00:00Z"))
-    print(d4)
-
-
-
-
-if __name__ == '__main__':
-    import asyncio
-
-    asyncio.run(main())
+        cnt_holiday = sum(bool(date in h)
+                      for h in self.region.holidays)
+        return cnt_holiday / len(self.region.holidays)

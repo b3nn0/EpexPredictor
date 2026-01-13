@@ -6,7 +6,7 @@ from typing import Generator
 import aiohttp
 import pandas as pd
 from .datastore import DataStore
-from .priceregion import *
+from .priceregion import PriceRegion
 
 log = logging.getLogger(__name__)
 
@@ -68,9 +68,9 @@ class PriceStore(DataStore):
 
         rangestart = None
         while curr <= end:
-            next = curr + timedelta(days=1)
+            next_day = curr + timedelta(days=1)
 
-            if rangestart is not None and (next in self.data.index or next > end or (curr - rangestart).total_seconds() > 60 * 60 * 24 * 90):
+            if rangestart is not None and (next_day in self.data.index or next_day > end or (curr - rangestart).total_seconds() > 60 * 60 * 24 * 90):
                 # We have the next timeslot already OR its the last timeslot OR the current range exceeds 90 days
                 yield (rangestart, curr)
                 rangestart = None
@@ -78,33 +78,4 @@ class PriceStore(DataStore):
             if rangestart is None and curr not in self.data.index:
                 rangestart = curr
 
-            curr = next
-
-
-async def main():
-    logging.basicConfig(
-        format='%(message)s',
-        level=logging.INFO
-    )
-    store = PriceStore(PriceRegion.DE)
-    d1 = await store.get_data(datetime.fromisoformat("2026-01-10T00:10:00Z"), datetime.fromisoformat("2026-01-12T00:00:00Z"))
-    print(d1)
-    d2 = await store.get_data(datetime.fromisoformat("2025-01-10T00:00:00Z"), datetime.fromisoformat("2025-01-12T00:00:00Z"))
-    print(d2)
-
-    histstart = datetime.now() - timedelta(days=63)
-    forecastend = datetime.now() - timedelta(days=57)
-    d3 = await store.get_data(histstart, forecastend)
-    print(d3)
-
-    # part of range already present -> 2 queries
-    d4 = await store.get_data(datetime.fromisoformat("2026-01-08T00:00:00Z"), datetime.fromisoformat("2026-01-14T00:00:00Z"))
-    print(d4)
-
-
-
-
-if __name__ == '__main__':
-    import asyncio
-
-    asyncio.run(main())
+            curr = next_day

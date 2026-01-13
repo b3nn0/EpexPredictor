@@ -53,10 +53,10 @@ class DataStore:
             return
         self.data = self.data[self.data.index >= pd.to_datetime(dt, utc=True)]
 
-    def _update_data(self, df : pd.DataFrame):
-        # TODO: isn't there a nicer way to do this?
-        self.data = pd.concat([self.data, df.dropna()]).dropna()
-        self.data = self.data.reset_index().drop_duplicates(subset='time', keep='last').set_index("time").sort_index()
+    def _update_data(self, df: pd.DataFrame):
+        df = df.dropna()
+        combined = pd.concat([self.data, df])
+        self.data = combined[~combined.index.duplicated(keep='last')].sort_index()
 
 
     def get_storage_file(self):
