@@ -2,6 +2,9 @@ from enum import Enum
 
 import holidays
 
+# Central European Time - used by DE, AT, BE
+TZ_CENTRAL_EUROPEAN = "Europe/Berlin"
+
 
 class PriceRegionName(str, Enum):
     """
@@ -43,21 +46,21 @@ class PriceRegion(Enum):
 
     DE = (
         "DE",
-        "Europe/Berlin",
+        TZ_CENTRAL_EUROPEAN,
         "DE-LU",
         [48.4, 49.7, 51.3, 52.8, 53.8, 54.1],
         [9.3, 11.3, 8.6, 12.0, 8.1, 11.6],
     )
     AT = (
         "AT",
-        "Europe/Berlin",
+        TZ_CENTRAL_EUROPEAN,
         "AT",
         [48.36, 48.27, 47.32, 47.00, 47.11],
         [16.31, 13.85, 10.82, 13.54, 15.80],
     )
     BE = (
         "BE",
-        "Europe/Berlin",
+        TZ_CENTRAL_EUROPEAN,
         "BE",
         [51.27, 50.73, 49.99],
         [3.07, 4.79, 5.38],

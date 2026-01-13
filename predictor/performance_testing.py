@@ -3,14 +3,13 @@
 import asyncio
 import logging
 import math
-import os
 from datetime import datetime, timedelta
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import model.pricepredictor as pred
 from model.auxdatastore import AuxDataStore
-from model.priceregion import *
+from model.priceregion import PriceRegion
 from model.pricestore import PriceStore
 from model.weatherstore import WeatherStore
 

@@ -1,16 +1,15 @@
 #!/usr/bin/python3
 
-import asyncio
 import logging
 import math
-from datetime import datetime, timedelta, timezone, tzinfo
-from typing import Dict, List, Tuple, cast
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Tuple, cast
 
 import pandas as pd
 import lightgbm as lgb
 
 from .auxdatastore import AuxDataStore
-from .priceregion import *
+from .priceregion import PriceRegion
 from .pricestore import PriceStore
 from .weatherstore import WeatherStore
 
@@ -146,11 +145,9 @@ class PricePredictor:
         updated = await self.pricestore.fetch_missing_data(lastdt, datetime.now(timezone.utc) + timedelta(days=3))
         if not updated:
             return False
-        
+
         lastafter = self.get_last_known_price()
-        if lastafter is not None and lastafter[0] != lastdt:
-            return True
-        return False
+        return lastafter is not None and lastafter[0] != lastdt
     
     def cleanup(self):
         """

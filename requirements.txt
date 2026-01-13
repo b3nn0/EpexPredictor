@@ -6,3 +6,8 @@ aiohttp
 astral
 fastapi[standard]
 lightgbm
+
+# Testing dependencies
+pytest
+pytest-asyncio
+httpx

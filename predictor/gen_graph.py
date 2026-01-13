@@ -9,9 +9,6 @@ from model.priceregion import PriceRegion
 
 
 async def main():
-    import sys
-
-    #pd.set_option("display.max_rows", None)
     logging.basicConfig(
         format='%(message)s',
         level=logging.INFO
@@ -26,10 +23,8 @@ async def main():
     predicted = await pred.predict(end, pred_end, fill_known=False)
     actual = await pred.pricestore.get_data(end, pred_end)
 
-    #xdt : List[datetime] = list(actual.keys())
-    #x = map(str, range(0, len(actual)))
-    actuals = map(lambda p: str(round(p, 1)), actual["price"])
-    preds = map(lambda p: str(round(p, 1)), predicted["price"])
+    actuals = [str(round(p, 1)) for p in actual["price"]]
+    preds = [str(round(p, 1)) for p in predicted["price"]]
 
     print (
         f"""
@@ -47,14 +42,7 @@ xychart-beta
     line [{",".join(actuals)}]
     line [{",".join(preds)}]
     """)
-    
 
-    
-    """prices = pred.predict()
-    prices = {
-        k.isoformat(): v for k, v in prices.items()
-    }
-    print(json.dumps(prices))"""
 
 if __name__ == "__main__":
     asyncio.run(main())
