@@ -9,7 +9,7 @@ from typing import Dict, List
 import pytz
 from fastapi import FastAPI, Query
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from predictor.model.priceregion import PriceRegion, PriceRegionName
 import predictor.model.pricepredictor as pp
@@ -75,8 +75,10 @@ class PricesModelShort(BaseModel):
     t: list[float]
 
 class PricesModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     prices: list[PriceModel]
-    known_until: datetime
+    known_until: datetime = Field(serialization_alias="knownUntil")
 
 
     
@@ -96,6 +98,24 @@ class RegionPriceManager:
     def __init__(self, region: PriceRegion):
         self.predictor = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
 
+    def _normalize_start_ts(self, start_ts: datetime | None, tz: pytz.BaseTzInfo) -> datetime:
+        """Normalize start_ts to the target timezone."""
+        if start_ts is None:
+            return datetime.now(tz=tz)
+        if start_ts.tzinfo is None:
+            return tz.localize(start_ts)
+        return start_ts.astimezone(tz)
+
+    def _compute_hourly_averages(self, prediction: Dict[datetime, float], tz: pytz.BaseTzInfo) -> Dict[datetime, float]:
+        """Compute hourly averages from 15-minute interval predictions."""
+        hourly_averages: Dict[datetime, list] = {}
+        for dt in sorted(prediction.keys()):
+            hour_key = dt.astimezone(tz).replace(minute=0, second=0, microsecond=0)
+            if hour_key not in hourly_averages:
+                hourly_averages[hour_key] = []
+            hourly_averages[hour_key].append(prediction[dt])
+        return {hour_dt: sum(prices) / len(prices) for hour_dt, prices in hourly_averages.items() if prices}
+
     async def prices(self, hours: int = -1, fixed_price: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
                     unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
                     timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG) -> PricesModel | PricesModelShort:
@@ -103,54 +123,26 @@ class RegionPriceManager:
         await self.update_in_background()
 
         tz = pytz.timezone(timezone)
-
-        if start_ts is None:
-            start_ts = datetime.now(tz=tz)
-        else:
-            if start_ts.tzinfo is None:
-                start_ts = start_ts.astimezone(tz)
-
-        end_ts = tz.localize(datetime(2999, 1, 1))
-        if hours >= 0:
-            end_ts = start_ts + timedelta(hours=hours)
+        start_ts = self._normalize_start_ts(start_ts, tz)
+        end_ts = start_ts + timedelta(hours=hours) if hours >= 0 else tz.localize(datetime(2999, 1, 1))
 
         prediction = self.cachedeval if evaluation else self.cachedprices
-
-        # Calculate hourly averages if hourly mode is enabled
         if hourly:
-            hourly_averages = {}
-            for dt in sorted(prediction.keys()):
-                dt_local = dt.astimezone(tz)
-                hour_key = dt_local.replace(minute=0, second=0, microsecond=0)
-
-                if hour_key not in hourly_averages:
-                    hourly_averages[hour_key] = []
-                hourly_averages[hour_key].append(prediction[dt])
-
-            # Replace prediction with hourly averages, skipping empty lists to avoid division by zero
-            prediction = {hour_dt: sum(prices) / len(prices) for hour_dt, prices in hourly_averages.items() if len(prices) > 0}
-
+            prediction = self._compute_hourly_averages(prediction, tz)
 
         prices: list[PriceModel] = []
-
         dts = sorted(prediction.keys())
         start_index = max(0, bisect.bisect_right(dts, start_ts) - 1)
         end_index = min(len(dts) - 1, bisect.bisect_right(dts, end_ts))
-        for dt in dts[start_index:end_index]:
-            price = prediction[dt]
-            total = (price + fixed_price) * (1 + tax_percent / 100.0)
-            total = unit.convert(total)
-            dt = dt.astimezone(tz)
 
-            prices.append(PriceModel(starts_at=dt, total=round(total, 4)))
+        for dt in dts[start_index:end_index]:
+            total = (prediction[dt] + fixed_price) * (1 + tax_percent / 100.0)
+            total = unit.convert(total)
+            prices.append(PriceModel(starts_at=dt.astimezone(tz), total=round(total, 4)))
 
         if format == OutputFormat.SHORT:
             return self.format_short(prices)
-        else:
-            return PricesModel(
-                prices=prices,
-                known_until=self.last_known_price[0].astimezone(tz)
-            )
+        return PricesModel(prices=prices, known_until=self.last_known_price[0].astimezone(tz))
 
         
     def format_short(self, prices: List[PriceModel]) -> PricesModelShort:
@@ -193,12 +185,13 @@ class RegionPriceManager:
                     retrain = True
 
 
-            if weather_age.total_seconds() > 60 * 60 * 3: # update weather every 3 hours
+            if weather_age.total_seconds() > 60 * 60 * 3:  # update weather every 3 hours
                 start = datetime.now(timezone.utc) - timedelta(days=1)
                 end = datetime.now(timezone.utc) + timedelta(days=8)
                 await self.predictor.refresh_weather(start, end)
                 self.last_weather_update = currts
-                retrain = True
+                # Don't retrain on weather updates - model already knows weather→price relationship,
+                # it just needs fresh weather data for prediction. Retrain only on new price data.
 
             if retrain:
                 train_start = datetime.now(timezone.utc) - timedelta(days=TRAINING_DAYS)

@@ -186,11 +186,19 @@ class TestPricePredictorRefreshMethods:
     """Tests for refresh_prices and refresh_weather methods."""
 
     @pytest.mark.asyncio
-    async def test_refresh_prices(self, sample_region):
-        """Test refresh_prices method."""
+    async def test_refresh_prices_returns_true_when_no_initial_data(self, sample_region):
+        """refresh_prices returns True when no initial data exists."""
+        predictor = PricePredictor(sample_region)
+        # No data in price store, so get_last_known_price() returns None
+        result = await predictor.refresh_prices()
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_refresh_prices_returns_false_when_no_new_data(self, sample_region):
+        """refresh_prices returns False when fetch_missing_data returns False."""
         predictor = PricePredictor(sample_region)
 
-        # Add some initial data to the price store so get_last_known_price() works
+        # Add initial data
         dates = pd.date_range(
             start="2025-11-01", end="2025-11-02", freq="15min", tz="UTC"
         )
@@ -198,14 +206,66 @@ class TestPricePredictorRefreshMethods:
         df.index.name = "time"
         predictor.pricestore._update_data(df)
 
-        # Mock the price store's fetch method
+        # Mock fetch to return False (no new data)
         predictor.pricestore.fetch_missing_data = AsyncMock(return_value=False)
-        predictor.pricestore.serialize = MagicMock()
 
-        await predictor.refresh_prices()
+        result = await predictor.refresh_prices()
 
-        # Should have called fetch
+        assert result is False
         assert predictor.pricestore.fetch_missing_data.called
+
+    @pytest.mark.asyncio
+    async def test_refresh_prices_returns_true_when_timestamp_advances(self, sample_region):
+        """refresh_prices returns True when new data is fetched and timestamp advances."""
+        predictor = PricePredictor(sample_region)
+
+        # Add initial data
+        initial_dates = pd.date_range(
+            start="2025-11-01", end="2025-11-02", freq="15min", tz="UTC"
+        )
+        df = pd.DataFrame({"price": [8.0] * len(initial_dates)}, index=initial_dates)
+        df.index.name = "time"
+        predictor.pricestore._update_data(df)
+
+        initial_last = predictor.get_last_known_price()
+
+        # Mock fetch to return True and add new data
+        def add_new_data(start, end):
+            new_dates = pd.date_range(
+                start="2025-11-02", end="2025-11-03", freq="15min", tz="UTC"
+            )
+            new_df = pd.DataFrame({"price": [9.0] * len(new_dates)}, index=new_dates)
+            new_df.index.name = "time"
+            predictor.pricestore._update_data(new_df)
+            return True
+
+        predictor.pricestore.fetch_missing_data = AsyncMock(side_effect=add_new_data)
+
+        result = await predictor.refresh_prices()
+
+        assert result is True
+        new_last = predictor.get_last_known_price()
+        assert new_last[0] > initial_last[0]
+
+    @pytest.mark.asyncio
+    async def test_refresh_prices_returns_false_when_timestamp_unchanged(self, sample_region):
+        """refresh_prices returns False when fetch returns True but timestamp unchanged."""
+        predictor = PricePredictor(sample_region)
+
+        # Add initial data
+        dates = pd.date_range(
+            start="2025-11-01", end="2025-11-02", freq="15min", tz="UTC"
+        )
+        df = pd.DataFrame({"price": [8.0] * len(dates)}, index=dates)
+        df.index.name = "time"
+        predictor.pricestore._update_data(df)
+
+        # Mock fetch to return True but don't add new data (timestamp stays same)
+        predictor.pricestore.fetch_missing_data = AsyncMock(return_value=True)
+
+        result = await predictor.refresh_prices()
+
+        assert result is False
 
     @pytest.mark.asyncio
     async def test_refresh_weather(self, sample_region):

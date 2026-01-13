@@ -121,7 +121,8 @@ class WeatherStore(DataStore):
 
     def needs_history_query(self, dt: datetime) -> bool:
         """
-        If query is older than 90 days, we need OpenMeteos historical data API. We do it a bit quicker already (60 days)
+        If query is older than 90 days, we need OpenMeteo's historical data API.
+        We switch to historical API at 60 days to be safe.
         """
-        currdate = datetime.now(timezone.utc)
-        return (currdate - dt).total_seconds() > 5184000
+        cutoff = datetime.now(timezone.utc) - timedelta(days=60)
+        return dt < cutoff

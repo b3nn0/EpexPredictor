@@ -131,8 +131,7 @@ class TestAPIEndpointPrices:
     """Tests for /prices endpoint."""
 
     def test_prices_endpoint_exists(self, client):
-        """Test that /prices endpoint exists."""
-        # This will fail because no data is loaded, but endpoint should exist
+        """Test that /prices endpoint returns 200 with mocked handler."""
         with patch("predictor.api.priceapi.prices_handler") as mock_handler:
             mock_handler.prices = AsyncMock(
                 return_value=PricesModel(
@@ -141,11 +140,10 @@ class TestAPIEndpointPrices:
                 )
             )
             response = client.get("/prices")
-            # Should return 200 or at least not 404
-            assert response.status_code != 404
+            assert response.status_code == 200
 
     def test_prices_with_hours_parameter(self, client):
-        """Test /prices with hours parameter."""
+        """Test /prices with hours parameter returns 200."""
         with patch("predictor.api.priceapi.prices_handler") as mock_handler:
             mock_handler.prices = AsyncMock(
                 return_value=PricesModel(
@@ -154,10 +152,10 @@ class TestAPIEndpointPrices:
                 )
             )
             response = client.get("/prices?hours=24")
-            assert response.status_code != 404
+            assert response.status_code == 200
 
     def test_prices_with_country_parameter(self, client):
-        """Test /prices with country parameter."""
+        """Test /prices with country parameter returns 200."""
         with patch("predictor.api.priceapi.prices_handler") as mock_handler:
             mock_handler.prices = AsyncMock(
                 return_value=PricesModel(
@@ -166,10 +164,10 @@ class TestAPIEndpointPrices:
                 )
             )
             response = client.get("/prices?country=DE")
-            assert response.status_code != 404
+            assert response.status_code == 200
 
     def test_prices_with_unit_parameter(self, client):
-        """Test /prices with unit parameter."""
+        """Test /prices with unit parameter returns 200."""
         with patch("predictor.api.priceapi.prices_handler") as mock_handler:
             mock_handler.prices = AsyncMock(
                 return_value=PricesModel(
@@ -178,20 +176,20 @@ class TestAPIEndpointPrices:
                 )
             )
             response = client.get("/prices?unit=EUR_PER_KWH")
-            assert response.status_code != 404
+            assert response.status_code == 200
 
 
 class TestAPIEndpointPricesShort:
     """Tests for /prices_short endpoint."""
 
     def test_prices_short_endpoint_exists(self, client):
-        """Test that /prices_short endpoint exists."""
+        """Test that /prices_short endpoint returns 200."""
         with patch("predictor.api.priceapi.prices_handler") as mock_handler:
             mock_handler.prices = AsyncMock(
                 return_value=PricesModelShort(s=[], t=[])
             )
             response = client.get("/prices_short")
-            assert response.status_code != 404
+            assert response.status_code == 200
 
 
 class TestRegionPriceManagerPrices:
