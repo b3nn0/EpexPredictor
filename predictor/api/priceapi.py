@@ -5,8 +5,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List
+from zoneinfo import ZoneInfo
 
-import pytz
 from fastapi import FastAPI, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -67,7 +67,7 @@ class OutputFormat(str, Enum):
     SHORT = "SHORT"
 
 class PriceModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    """Price at a specific time. Output-only model, uses camelCase for API compatibility."""
 
     starts_at: datetime = Field(serialization_alias="startsAt")
     total: float
@@ -100,15 +100,15 @@ class RegionPriceManager:
     def __init__(self, region: PriceRegion):
         self.predictor = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
 
-    def _normalize_start_ts(self, start_ts: datetime | None, tz: pytz.BaseTzInfo) -> datetime:
+    def _normalize_start_ts(self, start_ts: datetime | None, tz: ZoneInfo) -> datetime:
         """Normalize start_ts to the target timezone."""
         if start_ts is None:
             return datetime.now(tz=tz)
         if start_ts.tzinfo is None:
-            return tz.localize(start_ts)
+            return start_ts.replace(tzinfo=tz)
         return start_ts.astimezone(tz)
 
-    def _compute_hourly_averages(self, prediction: Dict[datetime, float], tz: pytz.BaseTzInfo) -> Dict[datetime, float]:
+    def _compute_hourly_averages(self, prediction: Dict[datetime, float], tz: ZoneInfo) -> Dict[datetime, float]:
         """Compute hourly averages from 15-minute interval predictions."""
         hourly_averages: Dict[datetime, list] = {}
         for dt in sorted(prediction.keys()):
@@ -124,9 +124,9 @@ class RegionPriceManager:
 
         await self.update_in_background()
 
-        tz = pytz.timezone(timezone)
+        tz = ZoneInfo(timezone)
         start_ts = self._normalize_start_ts(start_ts, tz)
-        end_ts = start_ts + timedelta(hours=hours) if hours >= 0 else tz.localize(datetime(2999, 1, 1))
+        end_ts = start_ts + timedelta(hours=hours) if hours >= 0 else datetime(2999, 1, 1, tzinfo=tz)
 
         prediction = self.cachedeval if evaluation else self.cachedprices
         if hourly:

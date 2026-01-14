@@ -253,7 +253,7 @@ class TestDataStorePersistenceEdgeCases:
         assert store.data.empty
 
     def test_load_corrupted_json_file(self, sample_region, temp_storage_dir):
-        """Test loading from corrupted JSON file raises an error."""
+        """Test loading from corrupted JSON file raises a ValueError."""
         import gzip
 
         # Create a corrupted gzip file
@@ -261,8 +261,8 @@ class TestDataStorePersistenceEdgeCases:
         with gzip.open(storage_path, 'wt') as f:
             f.write("{ this is not valid json }")
 
-        # Loading should raise an error
-        with pytest.raises(Exception):
+        # Loading should raise a ValueError (pandas raises this for invalid JSON)
+        with pytest.raises(ValueError):
             ConcreteDataStore(sample_region, temp_storage_dir, "test")
 
     def test_load_empty_json_file(self, sample_region, temp_storage_dir):
@@ -303,6 +303,40 @@ class TestDataStorePersistenceEdgeCases:
         assert isinstance(store.data.index, pd.DatetimeIndex)
         assert store.data.index.tz is not None  # Should be UTC
         assert len(store.data) == 10
+
+    def test_load_with_naive_datetime_index(self, sample_region, temp_storage_dir):
+        """Test loading legacy data where index is stored as naive ISO datetime strings.
+
+        This simulates an older persisted file whose index is encoded as ISO datetimes
+        without timezone information. The load() method should localize the
+        resulting DatetimeIndex to UTC.
+        """
+        import gzip
+        import json
+
+        # Create JSON with ISO datetime strings as keys (produces naive DatetimeIndex)
+        naive_dates = pd.date_range(start="2025-01-01", periods=10, freq="15min")
+        data = {
+            "value": {d.isoformat(): i for i, d in enumerate(naive_dates)}
+        }
+
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        with gzip.open(storage_path, 'wt') as f:
+            json.dump(data, f)
+
+        store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+
+        # Verify data was loaded and localized to UTC
+        assert not store.data.empty
+        assert isinstance(store.data.index, pd.DatetimeIndex)
+        assert store.data.index.tz is not None  # Should be localized to UTC
+        assert str(store.data.index.tz) == "UTC"
+        assert len(store.data) == 10
+
+        # Verify the timestamps match the original naive times interpreted as UTC
+        expected_utc = naive_dates.tz_localize("UTC")
+        expected_utc.name = "time"  # load() sets the index name to "time"
+        pd.testing.assert_index_equal(store.data.index, expected_utc)
 
     def test_load_preserves_data_values(self, sample_region, temp_storage_dir):
         """Test that loading preserves the original data values."""
