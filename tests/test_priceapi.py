@@ -96,6 +96,56 @@ class TestPriceModels:
         assert len(model.t) == 2
 
 
+class TestPriceModelSerializationAliases:
+    """Tests for backward-compatible JSON serialization aliases."""
+
+    def test_price_model_serializes_starts_at_as_camel_case(self):
+        """Test PriceModel serializes starts_at as 'startsAt' for backward compatibility."""
+        model = PriceModel(
+            starts_at=datetime(2025, 11, 1, 12, 0, tzinfo=timezone.utc),
+            total=10.5
+        )
+        json_dict = model.model_dump(by_alias=True)
+        assert "startsAt" in json_dict
+        assert "starts_at" not in json_dict
+
+    def test_price_model_internal_name_still_works(self):
+        """Test PriceModel can still be accessed via internal snake_case name."""
+        model = PriceModel(
+            starts_at=datetime(2025, 11, 1, 12, 0, tzinfo=timezone.utc),
+            total=10.5
+        )
+        assert model.starts_at == datetime(2025, 11, 1, 12, 0, tzinfo=timezone.utc)
+
+    def test_prices_model_serializes_known_until_as_camel_case(self):
+        """Test PricesModel serializes known_until as 'knownUntil' for backward compatibility."""
+        model = PricesModel(
+            prices=[],
+            known_until=datetime(2025, 11, 2, tzinfo=timezone.utc)
+        )
+        json_dict = model.model_dump(by_alias=True)
+        assert "knownUntil" in json_dict
+        assert "known_until" not in json_dict
+
+    def test_full_response_uses_camel_case_aliases(self):
+        """Test complete response structure uses camelCase for API backward compatibility."""
+        price = PriceModel(
+            starts_at=datetime(2025, 11, 1, 12, 0, tzinfo=timezone.utc),
+            total=10.5
+        )
+        model = PricesModel(
+            prices=[price],
+            known_until=datetime(2025, 11, 2, tzinfo=timezone.utc)
+        )
+        json_dict = model.model_dump(by_alias=True)
+
+        # Top level should have knownUntil
+        assert "knownUntil" in json_dict
+        # Nested price should have startsAt
+        assert "startsAt" in json_dict["prices"][0]
+        assert json_dict["prices"][0]["startsAt"] is not None
+
+
 class TestRegionPriceManagerFormatShort:
     """Tests for RegionPriceManager.format_short method."""
 

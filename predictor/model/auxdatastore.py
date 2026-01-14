@@ -2,10 +2,11 @@ import logging
 from datetime import datetime, timedelta, timezone, tzinfo
 import statistics
 from typing import Generator, cast
+from zoneinfo import ZoneInfo
 
 from astral import LocationInfo, sun
 import pandas as pd
-import pytz
+
 from .datastore import DataStore
 from .priceregion import PriceRegion
 
@@ -32,7 +33,7 @@ class AuxDataStore(DataStore):
 
         updated = False
 
-        tzlocal = pytz.timezone(self.region.timezone)
+        tzlocal = ZoneInfo(self.region.timezone)
 
         for rstart, rend in self.gen_missing_date_ranges(start, end):
             # make it full day to be sure
