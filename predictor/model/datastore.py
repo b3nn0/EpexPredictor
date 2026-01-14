@@ -77,7 +77,16 @@ class DataStore:
         if fn is not None and os.path.exists(fn):
             log.info(f"loading persisted {self.storage_fn_prefix} data for {self.region.bidding_zone}")
             self.data = pd.read_json(fn, compression='gzip')
-            self.data.index = self.data.index.tz_localize("UTC") # type: ignore
+
+            # Handle index type: to_json saves DatetimeIndex as epoch milliseconds,
+            # which read_json loads as Int64Index. Convert back to DatetimeIndex.
+            if not isinstance(self.data.index, pd.DatetimeIndex):
+                # Index values are epoch milliseconds
+                self.data.index = pd.to_datetime(self.data.index, unit='ms', utc=True)
+            elif self.data.index.tz is None:
+                # Index is DatetimeIndex but naive, localize to UTC
+                self.data.index = self.data.index.tz_localize("UTC")
+
             self.data.index.set_names("time", inplace=True)
             self.data.dropna(inplace=True)
 

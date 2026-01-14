@@ -242,3 +242,192 @@ class TestDataStoreSerialization:
         df.index.name = "time"
         store._update_data(df)
         store.serialize()  # Should not raise
+
+
+class TestDataStorePersistenceEdgeCases:
+    """Tests for edge cases in persistence loading."""
+
+    def test_load_nonexistent_file(self, sample_region, temp_storage_dir):
+        """Test loading when no persisted file exists results in empty data."""
+        store = ConcreteDataStore(sample_region, temp_storage_dir, "nonexistent")
+        assert store.data.empty
+
+    def test_load_corrupted_json_file(self, sample_region, temp_storage_dir):
+        """Test loading from corrupted JSON file raises an error."""
+        import gzip
+
+        # Create a corrupted gzip file
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        with gzip.open(storage_path, 'wt') as f:
+            f.write("{ this is not valid json }")
+
+        # Loading should raise an error
+        with pytest.raises(Exception):
+            ConcreteDataStore(sample_region, temp_storage_dir, "test")
+
+    def test_load_empty_json_file(self, sample_region, temp_storage_dir):
+        """Test loading from empty JSON object."""
+        import gzip
+
+        # Create an empty JSON object file
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        with gzip.open(storage_path, 'wt') as f:
+            f.write("{}")
+
+        store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        assert store.data.empty
+
+    def test_load_with_int64_index_epoch_ms(self, sample_region, temp_storage_dir):
+        """Test loading data where index is saved as epoch milliseconds (Int64Index).
+
+        This is the default behavior when using to_json() without special handling.
+        The load() method should convert it back to DatetimeIndex.
+        """
+        import gzip
+        import json
+
+        # Create JSON with epoch milliseconds as keys (simulating to_json output)
+        dates = pd.date_range(start="2025-01-01", periods=10, freq="15min", tz="UTC")
+        data = {}
+        for col in ["value"]:
+            data[col] = {str(int(d.timestamp() * 1000)): i for i, d in enumerate(dates)}
+
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        with gzip.open(storage_path, 'wt') as f:
+            json.dump(data, f)
+
+        store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+
+        # Verify data was loaded correctly
+        assert not store.data.empty
+        assert isinstance(store.data.index, pd.DatetimeIndex)
+        assert store.data.index.tz is not None  # Should be UTC
+        assert len(store.data) == 10
+
+    def test_load_preserves_data_values(self, sample_region, temp_storage_dir):
+        """Test that loading preserves the original data values."""
+        # Create and serialize data
+        store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        dates = pd.date_range(start="2025-01-01", periods=10, freq="15min", tz="UTC")
+        df = pd.DataFrame({"value": [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5]}, index=dates)
+        df.index.name = "time"
+        store1._update_data(df)
+        store1.serialize()
+
+        # Load into new store
+        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+
+        # Values should match
+        assert store2.data["value"].tolist() == pytest.approx([1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5])
+
+    def test_load_with_nan_values(self, sample_region, temp_storage_dir):
+        """Test that loading data with NaN values drops them correctly."""
+        import gzip
+        import json
+        import math
+
+        # Create JSON with some NaN values
+        dates = pd.date_range(start="2025-01-01", periods=5, freq="15min", tz="UTC")
+        data = {
+            "value": {
+                str(int(dates[0].timestamp() * 1000)): 1.0,
+                str(int(dates[1].timestamp() * 1000)): None,  # NaN in JSON
+                str(int(dates[2].timestamp() * 1000)): 3.0,
+                str(int(dates[3].timestamp() * 1000)): None,  # NaN in JSON
+                str(int(dates[4].timestamp() * 1000)): 5.0,
+            }
+        }
+
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        with gzip.open(storage_path, 'wt') as f:
+            json.dump(data, f)
+
+        store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+
+        # NaN rows should be dropped
+        assert len(store.data) == 3
+        assert all(not math.isnan(v) for v in store.data["value"])
+
+    def test_load_index_has_correct_name(self, sample_region, temp_storage_dir):
+        """Test that loaded data has index named 'time'."""
+        store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        dates = pd.date_range(start="2025-01-01", periods=5, freq="15min", tz="UTC")
+        df = pd.DataFrame({"value": range(5)}, index=dates)
+        df.index.name = "time"
+        store1._update_data(df)
+        store1.serialize()
+
+        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        assert store2.data.index.name == "time"
+
+    def test_load_index_is_utc(self, sample_region, temp_storage_dir):
+        """Test that loaded data has UTC timezone on index."""
+        store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        dates = pd.date_range(start="2025-01-01", periods=5, freq="15min", tz="UTC")
+        df = pd.DataFrame({"value": range(5)}, index=dates)
+        df.index.name = "time"
+        store1._update_data(df)
+        store1.serialize()
+
+        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        assert store2.data.index.tz is not None
+        assert str(store2.data.index.tz) == "UTC"
+
+    def test_load_multiple_columns(self, sample_region, temp_storage_dir):
+        """Test loading data with multiple columns."""
+        store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        dates = pd.date_range(start="2025-01-01", periods=5, freq="15min", tz="UTC")
+        df = pd.DataFrame({
+            "value1": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "value2": [10.0, 20.0, 30.0, 40.0, 50.0],
+            "value3": [100.0, 200.0, 300.0, 400.0, 500.0],
+        }, index=dates)
+        df.index.name = "time"
+        store1._update_data(df)
+        store1.serialize()
+
+        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+
+        assert list(store2.data.columns) == ["value1", "value2", "value3"]
+        assert store2.data["value1"].tolist() == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0])
+        assert store2.data["value2"].tolist() == pytest.approx([10.0, 20.0, 30.0, 40.0, 50.0])
+
+    def test_load_large_dataset(self, sample_region, temp_storage_dir):
+        """Test loading a larger dataset (1 year of 15-min data)."""
+        store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        # 1 year of 15-min intervals = 35040 rows
+        dates = pd.date_range(start="2025-01-01", periods=35040, freq="15min", tz="UTC")
+        df = pd.DataFrame({"value": range(35040)}, index=dates)
+        df.index.name = "time"
+        store1._update_data(df)
+        store1.serialize()
+
+        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+
+        assert len(store2.data) == 35040
+        assert store2.data.index[0] == pd.Timestamp("2025-01-01", tz="UTC")
+        assert store2.data.index[-1] == pd.Timestamp("2025-12-31 23:45:00", tz="UTC")
+
+    def test_serialize_overwrites_existing_file(self, sample_region, temp_storage_dir):
+        """Test that serialize overwrites existing data file."""
+        # Create first version
+        store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        dates1 = pd.date_range(start="2025-01-01", periods=5, freq="15min", tz="UTC")
+        df1 = pd.DataFrame({"value": [1, 2, 3, 4, 5]}, index=dates1)
+        df1.index.name = "time"
+        store1._update_data(df1)
+        store1.serialize()
+
+        # Create second version with different data
+        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        dates2 = pd.date_range(start="2025-06-01", periods=3, freq="15min", tz="UTC")
+        df2 = pd.DataFrame({"value": [100, 200, 300]}, index=dates2)
+        df2.index.name = "time"
+        store2.data = pd.DataFrame()  # Clear loaded data
+        store2._update_data(df2)
+        store2.serialize()
+
+        # Load and verify only second version exists
+        store3 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        assert len(store3.data) == 3
+        assert store3.data["value"].tolist() == [100, 200, 300]

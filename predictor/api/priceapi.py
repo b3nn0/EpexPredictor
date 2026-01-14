@@ -67,7 +67,9 @@ class OutputFormat(str, Enum):
     SHORT = "SHORT"
 
 class PriceModel(BaseModel):
-    starts_at: datetime
+    model_config = ConfigDict(populate_by_name=True)
+
+    starts_at: datetime = Field(serialization_alias="startsAt")
     total: float
 
 class PricesModelShort(BaseModel):
