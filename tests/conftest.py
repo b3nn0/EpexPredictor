@@ -72,7 +72,7 @@ def sample_weather_data():
 def sample_price_data():
     """Create sample price data DataFrame."""
     dates = pd.date_range(
-        start="2025-11-01",
+        start="2025-10-23", # longer range for lagged features
         end="2025-11-02",
         freq="15min",
         tz="UTC"
