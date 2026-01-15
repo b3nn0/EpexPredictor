@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -6,7 +7,7 @@ from typing import Generator
 import aiohttp
 import pandas as pd
 from .datastore import DataStore
-from .priceregion import *
+from .priceregion import PriceRegion
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class WeatherStore(DataStore):
     async def refresh_range(self, rstart: datetime, rend: datetime) -> bool:
         lats = ",".join(map(str, self.region.latitudes))
         lons = ",".join(map(str, self.region.longitudes))
-    
+
         updated = False
         if self.needs_history_query(rstart):
             host = "historical-forecast-api.open-meteo.com"
@@ -57,7 +58,7 @@ class WeatherStore(DataStore):
                             df[f"wind_{i}"] = winds
                             df[f"temp_{i}"] = temps
                             df.set_index("time", inplace=True)
-                            df.dropna(inplace=True)
+                            df = df.dropna()
                             frames.append(df)
 
                         df = pd.concat(frames, axis=1).reset_index()
@@ -75,7 +76,7 @@ class WeatherStore(DataStore):
                 continue
             break
 
-    
+
         if updated:
             log.info(f"weather data updated for {self.region.bidding_zone}")
             self.data.sort_index(inplace=True)
@@ -103,12 +104,12 @@ class WeatherStore(DataStore):
 
         rangestart = None
         while curr <= end:
-            next = curr + timedelta(days=1)
+            next_day = curr + timedelta(days=1)
 
-            apiswitch = rangestart is not None and self.needs_history_query(rangestart) != self.needs_history_query(next)
+            apiswitch = rangestart is not None and self.needs_history_query(rangestart) != self.needs_history_query(next_day)
 
 
-            if rangestart is not None and (next in self.data.index or next > end or apiswitch or (curr - rangestart).total_seconds() > 60 * 60 * 24 * 90):
+            if rangestart is not None and (next_day in self.data.index or next_day > end or apiswitch or (curr - rangestart).total_seconds() > 60 * 60 * 24 * 90):
                 # We have the next timeslot already OR its the last timeslot OR the current range exceeds 90 days (max for openmeteo) OR we need to change APIs
                 yield (rangestart, curr)
                 rangestart = None
@@ -116,44 +117,12 @@ class WeatherStore(DataStore):
             if rangestart is None and curr not in self.data.index:
                 rangestart = curr
 
-            curr = next
+            curr = next_day
 
     def needs_history_query(self, dt: datetime) -> bool:
         """
-        If query is older than 90 days, we need OpenMeteos historical data API. We do it a bit quicker already (60 days)
+        If query is older than 90 days, we need OpenMeteo's historical data API.
+        We switch to historical API at 60 days to be safe.
         """
-        currdate = datetime.now(timezone.utc)
-        return (currdate - dt).total_seconds() / 60.0 / 60.0 / 24.0 > 60
-    
-
-
-
-
-
-
-async def main():
-    logging.basicConfig(
-        format='%(message)s',
-        level=logging.INFO
-    )
-    store = WeatherStore(PriceRegion.DE)
-    d1 = await store.get_data(datetime.fromisoformat("2026-01-10T00:10:00Z"), datetime.fromisoformat("2026-01-12T00:00:00Z"))
-    print(d1)
-    d2 = await store.get_data(datetime.fromisoformat("2025-01-10T00:00:00Z"), datetime.fromisoformat("2025-01-12T00:00:00Z"))
-    print(d2)
-
-    histstart = datetime.now() - timedelta(days=63)
-    forecastend = datetime.now() - timedelta(days=57)
-    d3 = await store.get_data(histstart, forecastend)
-    print(d3)
-
-    # part of range already present -> 2 queries
-    d4 = await store.get_data(datetime.fromisoformat("2026-01-08T00:00:00Z"), datetime.fromisoformat("2026-01-14T00:00:00Z"))
-    print(d4)
-
-
-
-if __name__ == '__main__':
-    import asyncio
-
-    asyncio.run(main())
+        cutoff = datetime.now(timezone.utc) - timedelta(days=60)
+        return dt < cutoff
