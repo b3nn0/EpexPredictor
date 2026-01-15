@@ -4,9 +4,15 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+import pandas as pd
+import matplotlib.pyplot as plt
 from model.pricepredictor import PricePredictor
 from model.priceregion import PriceRegion
 
+START = datetime.fromisoformat("2026-01-01T00:00:00Z")
+END = datetime.fromisoformat("2026-01-21T00:00:00Z")
+LEARN_DAYS = 120
+REGION = PriceRegion.DE
 
 async def main():
     logging.basicConfig(
@@ -14,20 +20,27 @@ async def main():
         level=logging.INFO
     )
 
-    pred = PricePredictor(PriceRegion.DE, ".")
-    start = datetime.fromisoformat("2025-10-05T00:00:00Z")
-    end = start + timedelta(days=90)
-    await pred.train(start, end)
+    pred = PricePredictor(REGION, ".")
 
-    pred_end = end + timedelta(days=6)
-    predicted = await pred.predict(end, pred_end, fill_known=False)
-    actual = await pred.pricestore.get_data(end, pred_end)
+    learn_start = START - timedelta(days=LEARN_DAYS)
+    learn_end = START
+    await pred.train(learn_start, learn_end)
 
-    actuals = [str(round(p, 1)) for p in actual["price"]]
-    preds = [str(round(p, 1)) for p in predicted["price"]]
+    predicted = await pred.predict(START, END, fill_known=False)
+    pred_vals = map(float, pred.to_price_dict(predicted).values())
+    predicted = predicted.rename(columns={"price": "predicted"})
+    actual = await pred.pricestore.get_data(START, END)
+    actual_vals = map(float, pred.to_price_dict(actual).values())
+    actual = actual.rename(columns={"price": "actual"})
 
-    print (
-        f"""
+    merged = pd.concat([predicted, actual])
+    merged.plot.line()
+    plt.show()
+
+    pred_vals = [str(round(v, 1)) for v in pred_vals]
+    actual_vals = [str(round(v, 1)) for v in actual_vals]
+
+    print(f"""
 ---
 config:
     xyChart:
@@ -39,9 +52,10 @@ config:
 ---
 xychart-beta
     title "Performance comparison"
-    line [{",".join(actuals)}]
-    line [{",".join(preds)}]
+    line [{",".join(actual_vals)}]
+    line [{",".join(pred_vals)}]
     """)
+
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 holidays
 scikit-learn
 pandas
+matplotlib
 numpy
 aiohttp
 astral
