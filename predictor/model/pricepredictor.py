@@ -96,7 +96,7 @@ class PricePredictor:
 
         # Get extended price history for lagged features (need 7+ days before start)
         lag_start = start - timedelta(days=8)
-        historical_prices = self.pricestore.get_known_data(lag_start, end)
+        historical_prices = await self.pricestore.get_data(lag_start, end)
 
         # Add lagged price features
         periods_1d = 96  # 24 hours * 4 (15-min intervals)
