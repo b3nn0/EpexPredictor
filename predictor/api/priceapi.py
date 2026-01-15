@@ -192,8 +192,7 @@ class RegionPriceManager:
                 end = datetime.now(timezone.utc) + timedelta(days=8)
                 await self.predictor.refresh_weather(start, end)
                 self.last_weather_update = currts
-                # Don't retrain on weather updates - model already knows weather→price relationship,
-                # it just needs fresh weather data for prediction. Retrain only on new price data.
+                retrain = True
 
             if retrain:
                 train_start = datetime.now(timezone.utc) - timedelta(days=TRAINING_DAYS)
