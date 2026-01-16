@@ -14,7 +14,7 @@ from model.pricestore import PriceStore
 from model.weatherstore import WeatherStore
 
 START: datetime = datetime.fromisoformat("2025-01-01T00:00:00Z")
-END: datetime = datetime.fromisoformat("2026-01-11T00:00:00Z")
+END: datetime = datetime.fromisoformat("2026-01-01T00:00:00Z")
 REGION : PriceRegion = PriceRegion.DE
 LEARN_DAYS : int = 120
 
@@ -27,17 +27,17 @@ logging.basicConfig(
 
 async def load_weather() -> WeatherStore:
     weatherstore = WeatherStore(REGION, ".")
-    await weatherstore.fetch_missing_data(START, END)
+    await weatherstore.fetch_missing_data(START - timedelta(days=LEARN_DAYS), END)
     return weatherstore
 
 async def load_prices() -> PriceStore:
     pricestore = PriceStore(REGION, ".")
-    await pricestore.fetch_missing_data(START, END)
+    await pricestore.fetch_missing_data(START - timedelta(days=LEARN_DAYS), END)
     return pricestore
 
 async def load_aux() -> AuxDataStore:
     aux = AuxDataStore(REGION)
-    await aux.fetch_missing_data(START, END)
+    await aux.fetch_missing_data(START - timedelta(days=LEARN_DAYS), END)
     return aux
 
 async def main():
@@ -46,8 +46,8 @@ async def main():
     prices = await load_prices()
     aux = await load_aux()
 
-    learn_start = START
-    learn_end = learn_start + timedelta(days=LEARN_DAYS)
+    learn_start = START - timedelta(days=LEARN_DAYS)
+    learn_end = START
 
     # MAE/RMSE values for 1 to 3 day predictions
     d1_mae = []
