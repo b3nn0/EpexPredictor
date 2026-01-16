@@ -4,7 +4,7 @@ import statistics
 from typing import Generator, cast
 from zoneinfo import ZoneInfo
 
-from astral import LocationInfo, sun
+from astral import Observer, sun
 import pandas as pd
 
 from .datastore import DataStore
@@ -50,28 +50,18 @@ class AuxDataStore(DataStore):
             for i in range(6):
                 df[f"day_{i}"] = df["time"].apply(lambda t, i=i: 1 if t.astimezone(tzlocal).weekday() == i else 0)
             
-            timecols : list[pd.Series|pd.DataFrame] = []
            
-            locinfo = LocationInfo(name=self.region.country_code, region=self.region.country_code, timezone=self.region.timezone, latitude=statistics.mean(self.region.latitudes), longitude=statistics.mean(self.region.longitudes))
+            observer = Observer(latitude=statistics.mean(self.region.latitudes), longitude=statistics.mean(self.region.longitudes))
 
-            sunelev = df["time"].apply(lambda t, loc=locinfo: sun.elevation(locinfo.observer, t))
-            sunelev.name = "sunelevation"
-            timecols.append(sunelev)
+            df["sunelevation"] = df["time"].apply(lambda t: sun.elevation(observer, t))
+            df["azimuth"] = df["time"].apply(lambda t: sun.azimuth(observer, t))
+            df["sr_influence"] = df["time"].apply(lambda t: abs((t - sun.sunrise(observer, date=t)).total_seconds()))
+            df["ss_influence"] = df["time"].apply(lambda t: abs((t - sun.sunset(observer, date=t)).total_seconds()))
 
-            azimuth = df["time"].apply(lambda t, loc=locinfo: sun.azimuth(locinfo.observer, t))
-            azimuth.name = "azimuth"
-            timecols.append(azimuth)
+            df["morningpeak"] = df["time"].apply(lambda t: abs((t - t.replace(hour=6, minute=0)).total_seconds()))
+            df["eveningpeak"]  = df["time"].apply(lambda t: abs((t - t.replace(hour=18, minute=0)).total_seconds()))
 
-            sr_influence = df["time"].apply(lambda t, loc=locinfo: (t - sun.sunrise(loc.observer, date=t)).total_seconds())
-            sr_influence.name = "sr_influence"
-            timecols.append(sr_influence)
 
-            ss_influence = df["time"].apply(lambda t, loc=locinfo: (t - sun.sunset(loc.observer, date=t)).total_seconds())
-            ss_influence.name = "ss_influence"
-            timecols.append(ss_influence)
-
-            timecols.insert(0, df)
-            df = pd.concat(timecols, axis=1)
             df.set_index("time", inplace=True)
 
             self._update_data(df)

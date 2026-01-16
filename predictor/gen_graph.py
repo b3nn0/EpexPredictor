@@ -34,7 +34,7 @@ async def main():
     actual = actual.rename(columns={"price": "actual"})
 
     merged = pd.concat([predicted, actual])
-    merged.plot.line()
+    merged.plot.line(grid=True)
     plt.show()
 
     pred_vals = [str(round(v, 1)) for v in pred_vals]

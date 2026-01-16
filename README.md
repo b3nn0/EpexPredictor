@@ -41,6 +41,8 @@ Time features:
 - Holiday/Sunday indicator (regional holidays weighted by fraction of regions, e.g. 0.5 if half the regions have the holiday)
 - Sunrise influence: how many minutes between sunrise and the current time slot
 - Sunset influence: how many minutes between sunset and the current time slot
+- Morning influence: how many minutes between now and 6AM today
+- Evening influence: how many minutes between now and 6PM today
 
 Output:
 - Electricity price
@@ -59,10 +61,10 @@ Remarks:
 Results (1-day ahead prediction):
 | Country | MAE (ct/kWh) | RMSE (ct/kWh) |
 |---------|--------------|---------------|
-| DE | 1.73 | 2.74 |
-| AT | 1.77 | 2.89 |
-| BE | 1.68 | 2.55 |
-| NL | 1.74 | 2.75 |
+| DE | 1.68 | 2.63 |
+| AT | 1.79 | 2.91 |
+| BE | 1.64 | 2.50 |
+| NL | 1.67 | 2.59 |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh

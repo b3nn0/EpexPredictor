@@ -48,8 +48,9 @@ class PricePredictor:
         self.predictor = lgb.LGBMRegressor(
             n_estimators=100,
             learning_rate=0.1,
-            max_depth=6,
+            max_depth=-1,
             num_leaves=31,
+            force_col_wise=True,
             verbosity=-1
         )
         self.predictor.fit(params, output)

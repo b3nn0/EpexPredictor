@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Model performance evaluation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "predictor/performance_testing.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Python Debugger: FastAPI",
             "type": "debugpy",
             "request": "launch",

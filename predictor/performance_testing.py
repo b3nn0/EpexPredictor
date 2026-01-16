@@ -13,8 +13,8 @@ from model.priceregion import PriceRegion
 from model.pricestore import PriceStore
 from model.weatherstore import WeatherStore
 
-START: datetime = datetime.fromisoformat("2025-01-01T00:00:00Z")
-END: datetime = datetime.fromisoformat("2026-01-01T00:00:00Z")
+START: datetime = datetime.fromisoformat("2025-01-17T00:00:00Z")
+END: datetime = datetime.fromisoformat("2026-01-17T00:00:00Z")
 REGION : PriceRegion = PriceRegion.DE
 LEARN_DAYS : int = 120
 
@@ -64,6 +64,7 @@ async def main():
     iterations = 0
 
     while learn_end < END - timedelta(days=3):
+        
         # intervals to predict and check. Could be done nicer but w/e
         d0 = learn_end
         d1 = learn_end + timedelta(days=1)
@@ -94,6 +95,9 @@ async def main():
         learn_start += timedelta(days=1)
         learn_end += timedelta(days=1)
         iterations += 1
+        print('.', end='')
+
+    print()
 
 
     print(f"iterations tested: {iterations}")
