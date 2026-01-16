@@ -35,11 +35,12 @@ Lagged price features:
 - Price from 7 days ago (price_lag_7d)
 
 Time features:
-- Hour of day (one-hot encoded, 96 intervals)
+- Azimuth of the sun as indicator of time of day
+- Elevation of the sun
 - Day of the week (Monday to Saturday)
 - Holiday/Sunday indicator (regional holidays weighted by fraction of regions, e.g. 0.5 if half the regions have the holiday)
-- Sunrise influence: how many minutes between sunrise and now, capped at 3 hours ($\min(180, |t_{now} - t_{sunrise}|)$ minutes)
-- Sunset influence: same as sunrise $\min(180, |t_{now} - t_{sunset}|)$ minutes
+- Sunrise influence: how many minutes between sunrise and the current time slot
+- Sunset influence: how many minutes between sunset and the current time slot
 
 Output:
 - Electricity price
@@ -58,10 +59,10 @@ Remarks:
 Results (1-day ahead prediction):
 | Country | MAE (ct/kWh) | RMSE (ct/kWh) |
 |---------|--------------|---------------|
-| DE | 1.63 | 2.58 |
-| AT | 1.70 | 2.68 |
-| BE | 1.63 | 2.49 |
-| NL | 1.64 | 2.55 |
+| DE | 1.73 | 2.74 |
+| AT | 1.77 | 2.89 |
+| BE | 1.68 | 2.55 |
+| NL | 1.74 | 2.75 |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh

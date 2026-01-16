@@ -54,26 +54,6 @@ class TestAuxDataStoreIsHoliday:
         assert result == pytest.approx(1.0)
 
 
-class TestAuxDataStoreIsTimestamp:
-    """Tests for is_timestamp method."""
-
-    def test_matching_timestamp(self, sample_region):
-        """Test that matching hour/minute returns 1."""
-        store = AuxDataStore(sample_region)
-        tz = timezone.utc
-        dt = datetime(2025, 11, 1, 12, 30, tzinfo=tz)
-        result = store.is_timestamp(tz, dt, 12, 30)
-        assert result == 1
-
-    def test_non_matching_timestamp(self, sample_region):
-        """Test that non-matching hour/minute returns 0."""
-        store = AuxDataStore(sample_region)
-        tz = timezone.utc
-        dt = datetime(2025, 11, 1, 12, 30, tzinfo=tz)
-        result = store.is_timestamp(tz, dt, 10, 0)
-        assert result == 0
-
-
 class TestAuxDataStoreFetchMissingData:
     """Tests for fetch_missing_data method."""
 
@@ -97,8 +77,8 @@ class TestAuxDataStoreFetchMissingData:
         for i in range(6):
             assert f"day_{i}" in store.data.columns
         # Time slot columns (format: i_{hour}_{minute})
-        assert "i_0_0" in store.data.columns  # midnight
-        assert "i_23_45" in store.data.columns  # last slot
+        assert "sunelevation" in store.data.columns  # midnight
+        assert "azimuth" in store.data.columns  # last slot
         # Sunrise/sunset influence
         assert "sr_influence" in store.data.columns
         assert "ss_influence" in store.data.columns
@@ -156,24 +136,6 @@ class TestAuxDataStoreTimeSlotEncoding:
             slot_sum = sum(row[col] for col in slot_cols if col in row.index)
             assert slot_sum == 1
 
-    @pytest.mark.asyncio
-    async def test_correct_slots_for_midnight(self, sample_region):
-        """Test that time slots are one-hot encoded properly."""
-        store = AuxDataStore(sample_region)
-        # Use a range that will generate data
-        start = datetime(2025, 11, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 11, 3, tzinfo=timezone.utc)
-
-        await store.fetch_missing_data(start, end)
-
-        # Check that data was created and has time slot columns
-        assert not store.data.empty
-        # Each row should have exactly one time slot set to 1
-        slot_cols = [f"i_{h}_{m}" for h in range(24) for m in range(0, 60, 15)]
-        for _, row in store.data.head(10).iterrows():
-            slot_sum = sum(row[col] for col in slot_cols if col in row.index)
-            assert slot_sum == 1
-
 
 class TestAuxDataStoreSunriseSunset:
     """Tests for sunrise/sunset influence calculation."""
@@ -189,27 +151,11 @@ class TestAuxDataStoreSunriseSunset:
         await store.fetch_missing_data(start, end)
 
         # Values should be between 0 and 180 (capped at 3 hours)
-        assert store.data["sr_influence"].min() >= 0
-        assert store.data["sr_influence"].max() <= 180
-        assert store.data["ss_influence"].min() >= 0
-        assert store.data["ss_influence"].max() <= 180
+        assert store.data["sr_influence"].min() >= -24 * 60 * 60
+        assert store.data["sr_influence"].max() <= 24 * 60 * 60
+        assert store.data["ss_influence"].min() >= -24 * 60 * 60
+        assert store.data["ss_influence"].max() <= 24 * 60 * 60
 
-    @pytest.mark.asyncio
-    async def test_midday_has_high_influence(self, sample_region):
-        """Test that midday has high sunrise/sunset influence (far from both)."""
-        store = AuxDataStore(sample_region)
-        # Use a range that will generate data
-        start = datetime(2025, 11, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 11, 3, tzinfo=timezone.utc)
-
-        await store.fetch_missing_data(start, end)
-
-        # Filter to midday hours
-        midday_data = store.data[(store.data.index.hour >= 11) & (store.data.index.hour <= 13)]
-        if not midday_data.empty:
-            # Both should be at or near the cap of 180
-            assert midday_data["sr_influence"].mean() > 100
-            assert midday_data["ss_influence"].mean() > 100
 
 
 class TestAuxDataStoreGetData:

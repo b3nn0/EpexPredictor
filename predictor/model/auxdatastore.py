@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import datetime, timedelta, timezone
 import statistics
 from typing import Generator, cast
 from zoneinfo import ZoneInfo
@@ -51,18 +51,22 @@ class AuxDataStore(DataStore):
                 df[f"day_{i}"] = df["time"].apply(lambda t, i=i: 1 if t.astimezone(tzlocal).weekday() == i else 0)
             
             timecols : list[pd.Series|pd.DataFrame] = []
-            for h in range(24):
-                for m in range(0, 60, 15):
-                    col = df["time"].apply(lambda t, h=h, m=m: self.is_timestamp(tzlocal, t, h, m))
-                    col.name = f"i_{h}_{m}"
-                    timecols.append(col)
-            
+           
             locinfo = LocationInfo(name=self.region.country_code, region=self.region.country_code, timezone=self.region.timezone, latitude=statistics.mean(self.region.latitudes), longitude=statistics.mean(self.region.longitudes))
-            sr_influence = df["time"].apply(lambda t, loc=locinfo: min(180, abs((t - sun.sun(loc.observer, date=t)["sunrise"]).total_seconds() / 60)))
+
+            sunelev = df["time"].apply(lambda t, loc=locinfo: sun.elevation(locinfo.observer, t))
+            sunelev.name = "sunelevation"
+            timecols.append(sunelev)
+
+            azimuth = df["time"].apply(lambda t, loc=locinfo: sun.azimuth(locinfo.observer, t))
+            azimuth.name = "azimuth"
+            timecols.append(azimuth)
+
+            sr_influence = df["time"].apply(lambda t, loc=locinfo: (t - sun.sunrise(loc.observer, date=t)).total_seconds())
             sr_influence.name = "sr_influence"
             timecols.append(sr_influence)
 
-            ss_influence = df["time"].apply(lambda t, loc=locinfo: min(180, abs((t - sun.sun(loc.observer, date=t)["sunset"]).total_seconds() / 60)))
+            ss_influence = df["time"].apply(lambda t, loc=locinfo: (t - sun.sunset(loc.observer, date=t)).total_seconds())
             ss_influence.name = "ss_influence"
             timecols.append(ss_influence)
 
@@ -100,10 +104,6 @@ class AuxDataStore(DataStore):
             curr = next_day
 
 
-    def is_timestamp(self, tz : tzinfo, t : datetime, h : int, m : int) -> int:
-        local = t.astimezone(tz)
-        return 1 if local.hour == h and local.minute == m else 0
-    
     def is_holiday(self, t : pd.Timestamp) -> float:
         if t.weekday() == 6:
             return 1
