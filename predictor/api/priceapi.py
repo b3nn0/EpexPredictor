@@ -277,7 +277,8 @@ async def get_prices_short(
 async def gen_eval_plot(
     start_ts: datetime | None = Query(None, description="Plot range start, at most ~1 year in the past. Default now", alias="startTs"),
     end_ts: datetime | None = Query(None, description="Plot range end, Default now + 1 week. At most 4 weeks after startTs and 10 days from now", alias="endTs"),
-    region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country")):
+    region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
+    transparent: bool = Query(False, description="Render with transparent background")):
     f"""
     Trains a model just for you, training with {TRAINING_DAYS} days before the given time range and providing a forecast for the given range.
     - If there is no cached weather or price data for the given time range, this request can take a while. Be patient.
@@ -314,7 +315,7 @@ async def gen_eval_plot(
     merged = pd.concat([predicted, actual])
 
     img_data = BytesIO()
-    merged.plot.line(grid=True).figure.savefig(img_data) # type:ignore
+    merged.plot.line(grid=True).figure.savefig(img_data, transparent=transparent) # type:ignore
     img_data.seek(0)
     
     return Response(content=img_data.read(),media_type="image/png")

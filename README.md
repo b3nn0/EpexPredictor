@@ -77,6 +77,8 @@ This graph compares the actual prices to the ones returned by the model for a tw
 Note that this was created for a time range in the past with historic weather data, rather than forecasted weather data,
 so actual performance might be a bit worse if the weather forecast is not correct.
 
+Feel free to generate your own performance evaluation graphs for any time range [here](http://localhost:8000/docs#/default/gen_eval_plot_eval_plot_get).
+
 ```mermaid
 ---
 config:
