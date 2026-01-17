@@ -22,7 +22,7 @@ class PriceStore(DataStore):
     
 
     def __init__(self, region : PriceRegion, storage_dir=None):
-        super().__init__(region, storage_dir, "prices")
+        super().__init__(region, storage_dir, "prices_v2")
 
 
 
@@ -48,6 +48,7 @@ class PriceStore(DataStore):
                     df.index = pd.to_datetime(df.index, unit="s", utc=True)
                     df.index.name = "time"
                     df["price"] = df["price"] / 10
+                    df = df.resample('15min').ffill()
 
                     self._update_data(df)
                     updated = True
@@ -57,7 +58,6 @@ class PriceStore(DataStore):
             log.info(f"price data updated for {self.region.bidding_zone}")
             self.data.sort_index(inplace=True)
             # Resample old hourly data to 15 minutes so it matches weather data - used during performance testing
-            self.data = self.data.resample('15min').ffill()
             self.serialize()
         return updated
 
