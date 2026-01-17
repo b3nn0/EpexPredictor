@@ -1,13 +1,15 @@
 import asyncio
 import bisect
+from io import BytesIO
 import logging
 import os
+import pandas as pd
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -223,6 +225,11 @@ class Prices:
         if region not in self.region_prices:
             self.region_prices[region] = RegionPriceManager(region)
         return await self.region_prices[region].prices(hours, fixed_price, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
+    
+    def get_predictor(self, region):
+        if region not in self.region_prices:
+            self.region_prices[region] = RegionPriceManager(region)
+        return self.region_prices[region].predictor
 
 
 prices_handler = Prices()
@@ -266,4 +273,54 @@ async def get_prices_short(
     return res
 
 
+@app.get("/eval_plot")
+async def gen_eval_plot(
+    start_ts: datetime | None = Query(None, description="Plot range start, at most ~1 year in the past. Default now", alias="startTs"),
+    end_ts: datetime | None = Query(None, description="Plot range end, Default now + 1 week. At most 4 weeks after startTs and 10 days from now", alias="endTs"),
+    region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country")):
+    f"""
+    Trains a model just for you, training with {TRAINING_DAYS} days before the given time range and providing a forecast for the given range.
+    - If there is no cached weather or price data for the given time range, this request can take a while. Be patient.
+    - This request is rather CPU intensive. Do not batch-call or you will be banned.
+    """
+    start_ts = start_ts or datetime.now(timezone.utc)
+    end_ts = end_ts or start_ts + timedelta(days=7)
+    if (end_ts - start_ts).total_seconds() > 28 * 24 * 60 * 60:
+        return HTTPException(status_code=400, detail="At most 4 weeks can be plotted")
     
+    if start_ts < datetime.now(timezone.utc) - timedelta(days=365):
+        return HTTPException(status_code=400, detail="Requested range too far in the past")
+    
+    if end_ts > datetime.now(timezone.utc) + timedelta(days=10):
+        return HTTPException(status_code=400, detail="Requested range too far in the future")
+
+    # reuse the same data stores for a unified cache
+    orig_predictor = prices_handler.get_predictor(region.to_region())
+    
+    predictor = pp.PricePredictor(region.to_region())
+    predictor.weatherstore = orig_predictor.weatherstore
+    predictor.pricestore = orig_predictor.pricestore
+    predictor.auxstore = orig_predictor.auxstore
+
+    learn_start = start_ts - timedelta(days=TRAINING_DAYS)
+    learn_end = start_ts
+    await predictor.train(learn_start, learn_end)
+
+    predicted = await predictor.predict(start_ts, end_ts, fill_known=False)
+    predicted = predicted.rename(columns={"price": "predicted"})
+    actual = await predictor.pricestore.get_data(start_ts, end_ts)
+    actual = actual.rename(columns={"price": "actual"})
+
+    merged = pd.concat([predicted, actual])
+
+    img_data = BytesIO()
+    merged.plot.line(grid=True).figure.savefig(img_data) # type:ignore
+    img_data.seek(0)
+    
+    return Response(content=img_data.read(),media_type="image/png")
+
+
+
+
+
+
