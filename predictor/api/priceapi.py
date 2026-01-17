@@ -3,6 +3,7 @@ import bisect
 from io import BytesIO
 import logging
 import os
+from matplotlib.figure import Figure
 import pandas as pd
 import matplotlib
 matplotlib.use("agg")
@@ -292,7 +293,9 @@ async def generate_evaluation_plot(
     start_ts: datetime | None = Query(None, description="Plot range start, at most ~1 year in the past. Default today 00:00Z", alias="startTs"),
     end_ts: datetime | None = Query(None, description="Plot range end, Default startTs + 1 week. At most 31 days after startTs and 10 days from now", alias="endTs"),
     region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
-    transparent: bool = Query(False, description="Render with transparent background")):
+    transparent: bool = Query(False, description="Render with transparent background"),
+    width: int = Query(2048, description="image width in pixels", ge=300, le=10000),
+    height: int = Query(1024, description="image height in pixels", ge=300, le=10000)):
     """
     Trains a model just for you, training with 120 days before the given time range and providing a forecast for the given range.
     - If there is no cached weather or price data for the given time range, this request can take a while. Be patient.
@@ -340,11 +343,14 @@ async def generate_evaluation_plot(
     merged = pd.concat([predicted, actual])
 
     img_data = BytesIO()
-    plot = merged.plot.line(grid=True, )
-    plot.figure.savefig(img_data, format="png", transparent=transparent) # type:ignore
-    plt.close(plot.figure) # type:ignore
+    plot = merged.plot.line(grid=True)
+    assert isinstance(plot.figure, Figure)
+    plot.margins(0)
+    plot.figure.set_size_inches(width / 100, height / 100)
+    plot.figure.savefig(img_data, format="png", transparent=transparent, dpi=100, bbox_inches="tight")
+    plt.close(plot.figure)
+
     img_data.seek(0)
-    
     return Response(content=img_data.read(), media_type="image/png")
 
 
