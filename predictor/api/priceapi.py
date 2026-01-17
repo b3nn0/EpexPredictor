@@ -4,6 +4,10 @@ from io import BytesIO
 import logging
 import os
 import pandas as pd
+import matplotlib
+matplotlib.use("agg")
+
+import matplotlib.pyplot as plt
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List
@@ -32,6 +36,8 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     level=logging.INFO
 )
+
+
 
 
 logging.getLogger("uvicorn.error").handlers.clear()
@@ -273,27 +279,36 @@ async def get_prices_short(
     return res
 
 
-@app.get("/eval_plot")
-async def gen_eval_plot(
+@app.get("/eval_plot", response_class=Response, response_model=None, responses={
+        200: {
+            "content": {"image/png": {}},
+            "description": "PNG plot"
+        }
+    })
+async def generate_evaluation_plot(
     start_ts: datetime | None = Query(None, description="Plot range start, at most ~1 year in the past. Default now", alias="startTs"),
     end_ts: datetime | None = Query(None, description="Plot range end, Default now + 1 week. At most 4 weeks after startTs and 10 days from now", alias="endTs"),
     region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
     transparent: bool = Query(False, description="Render with transparent background")):
-    f"""
-    Trains a model just for you, training with {TRAINING_DAYS} days before the given time range and providing a forecast for the given range.
+    """
+    Trains a model just for you, training with 120 days before the given time range and providing a forecast for the given range.
     - If there is no cached weather or price data for the given time range, this request can take a while. Be patient.
     - This request is rather CPU intensive. Do not batch-call or you will be banned.
     """
-    start_ts = start_ts or datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    start_ts = start_ts or now
     end_ts = end_ts or start_ts + timedelta(days=7)
     if (end_ts - start_ts).total_seconds() > 28 * 24 * 60 * 60:
         return HTTPException(status_code=400, detail="At most 4 weeks can be plotted")
     
-    if start_ts < datetime.now(timezone.utc) - timedelta(days=365):
+    if start_ts < now - timedelta(days=365):
         return HTTPException(status_code=400, detail="Requested range too far in the past")
     
-    if end_ts > datetime.now(timezone.utc) + timedelta(days=10):
+    if end_ts > now + timedelta(days=10):
         return HTTPException(status_code=400, detail="Requested range too far in the future")
+    
+    if end_ts <= start_ts:
+        return HTTPException(status_code=400, detail="endTs must be after startTs")
 
     # reuse the same data stores for a unified cache
     orig_predictor = prices_handler.get_predictor(region.to_region())
@@ -309,16 +324,23 @@ async def gen_eval_plot(
 
     predicted = await predictor.predict(start_ts, end_ts, fill_known=False)
     predicted = predicted.rename(columns={"price": "predicted"})
-    actual = await predictor.pricestore.get_data(start_ts, end_ts)
+
+    # make sure we don't refetch future price data with each request - only force-fetch until today.
+    # Later price might be returned if the main price API already fetched it.
+    latest_price_to_fetch = min(end_ts, now)
+    await predictor.pricestore.fetch_missing_data(start_ts, latest_price_to_fetch)
+    actual = predictor.pricestore.get_known_data(start_ts, end_ts)
     actual = actual.rename(columns={"price": "actual"})
 
     merged = pd.concat([predicted, actual])
 
     img_data = BytesIO()
-    merged.plot.line(grid=True).figure.savefig(img_data, transparent=transparent) # type:ignore
+    plot = merged.plot.line(grid=True, )
+    plot.figure.savefig(img_data, format="png", transparent=transparent) # type:ignore
+    plt.close(plot.figure) # type:ignore
     img_data.seek(0)
     
-    return Response(content=img_data.read(),media_type="image/png")
+    return Response(content=img_data.read(), media_type="image/png")
 
 
 
