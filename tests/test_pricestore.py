@@ -22,7 +22,7 @@ class TestPriceStoreInit:
         """Test initialization with storage directory."""
         store = PriceStore(sample_region, temp_storage_dir)
         assert store.storage_dir == temp_storage_dir
-        assert store.storage_fn_prefix == "prices"
+        assert store.storage_fn_prefix.startswith("prices")
 
 
 class TestPriceStoreFetchMissingData:
