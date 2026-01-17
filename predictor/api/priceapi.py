@@ -283,11 +283,14 @@ async def get_prices_short(
         200: {
             "content": {"image/png": {}},
             "description": "PNG plot"
+        },
+        400: {
+            "content": {"application/json": {}}
         }
     })
 async def generate_evaluation_plot(
-    start_ts: datetime | None = Query(None, description="Plot range start, at most ~1 year in the past. Default now", alias="startTs"),
-    end_ts: datetime | None = Query(None, description="Plot range end, Default now + 1 week. At most 4 weeks after startTs and 10 days from now", alias="endTs"),
+    start_ts: datetime | None = Query(None, description="Plot range start, at most ~1 year in the past. Default today 00:00Z", alias="startTs"),
+    end_ts: datetime | None = Query(None, description="Plot range end, Default startTs + 1 week. At most 31 days after startTs and 10 days from now", alias="endTs"),
     region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
     transparent: bool = Query(False, description="Render with transparent background")):
     """
@@ -296,19 +299,21 @@ async def generate_evaluation_plot(
     - This request is rather CPU intensive. Do not batch-call or you will be banned.
     """
     now = datetime.now(timezone.utc)
-    start_ts = start_ts or now
+    start_ts = start_ts or now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_ts = end_ts or start_ts + timedelta(days=7)
-    if (end_ts - start_ts).total_seconds() > 28 * 24 * 60 * 60:
-        return HTTPException(status_code=400, detail="At most 4 weeks can be plotted")
+    start_ts = start_ts.astimezone(timezone.utc)
+    end_ts = end_ts.astimezone(timezone.utc)
+    if (end_ts - start_ts).total_seconds() > 31 * 24 * 60 * 60:
+        raise HTTPException(status_code=400, detail="At most 4 weeks can be plotted")
     
     if start_ts < now - timedelta(days=365):
-        return HTTPException(status_code=400, detail="Requested range too far in the past")
+        raise HTTPException(status_code=400, detail="Requested range too far in the past")
     
     if end_ts > now + timedelta(days=10):
-        return HTTPException(status_code=400, detail="Requested range too far in the future")
+        raise HTTPException(status_code=400, detail="Requested range too far in the future")
     
     if end_ts <= start_ts:
-        return HTTPException(status_code=400, detail="endTs must be after startTs")
+        raise HTTPException(status_code=400, detail="endTs must be after startTs")
 
     # reuse the same data stores for a unified cache
     orig_predictor = prices_handler.get_predictor(region.to_region())
