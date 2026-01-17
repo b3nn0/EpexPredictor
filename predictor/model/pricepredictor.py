@@ -97,7 +97,9 @@ class PricePredictor:
 
         # Get extended price history for lagged features (need 7+ days before start)
         lag_start = start - timedelta(days=8)
-        historical_prices = await self.pricestore.get_data(lag_start, end)
+        latest_possible_prices = min(end, datetime.now(timezone.utc).replace(hour=23, minute=45))
+        await self.pricestore.fetch_missing_data(lag_start, latest_possible_prices)
+        historical_prices = self.pricestore.get_known_data(lag_start, end)
 
         # Add lagged price features
         periods_1d = 96  # 24 hours * 4 (15-min intervals)
@@ -111,9 +113,8 @@ class PricePredictor:
         # Extract just the lagged features and reindex to match weather data range
         # This ensures we have rows for future dates where prices don't exist yet
         lagged_features = historical_prices[["price_lag_1d", "price_lag_7d"]]
-        lagged_features = lagged_features.reindex(weather.index).ffill()
 
-        df = pd.concat([weather, auxdata, lagged_features], axis=1).dropna()
+        df = pd.concat([weather, auxdata, lagged_features], axis=1).ffill().dropna()
         df = pd.concat([df, prices], axis=1)
         return df
 
