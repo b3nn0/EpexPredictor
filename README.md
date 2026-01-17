@@ -30,10 +30,6 @@ Weather features (per sample location):
 - Temperature at 2m
 - Global tilted irradiance (solar)
 
-Lagged price features:
-- Price from 24 hours ago (price_lag_1d)
-- Price from 7 days ago (price_lag_7d)
-
 Time features:
 - Azimuth of the sun as indicator of time of day
 - Elevation of the sun

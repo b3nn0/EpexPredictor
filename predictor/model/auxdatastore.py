@@ -55,11 +55,11 @@ class AuxDataStore(DataStore):
 
             df["sunelevation"] = df["time"].apply(lambda t: sun.elevation(observer, t))
             df["azimuth"] = df["time"].apply(lambda t: sun.azimuth(observer, t))
-            df["sr_influence"] = df["time"].apply(lambda t: abs((t - sun.sunrise(observer, date=t)).total_seconds()))
-            df["ss_influence"] = df["time"].apply(lambda t: abs((t - sun.sunset(observer, date=t)).total_seconds()))
+            df["sr_influence"] = df["time"].apply(lambda t: (t - sun.sunrise(observer, date=t)).total_seconds())
+            df["ss_influence"] = df["time"].apply(lambda t: (t - sun.sunset(observer, date=t)).total_seconds())
 
-            df["morningpeak"] = df["time"].apply(lambda t: abs((t - t.replace(hour=6, minute=0)).total_seconds()))
-            df["eveningpeak"]  = df["time"].apply(lambda t: abs((t - t.replace(hour=18, minute=0)).total_seconds()))
+            df["morningpeak"] = df["time"].apply(lambda t: (t - t.replace(hour=6, minute=0)).total_seconds())
+            df["eveningpeak"]  = df["time"].apply(lambda t: (t - t.replace(hour=18, minute=0)).total_seconds())
 
 
             df.set_index("time", inplace=True)
