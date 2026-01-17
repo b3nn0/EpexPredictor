@@ -87,7 +87,7 @@ class PricePredictor:
 
 
 
-    async def prepare_dataframe(self, start: datetime, end: datetime, refresh_prices) -> pd.DataFrame | None:
+    async def prepare_dataframe(self, start: datetime, end: datetime, refresh_prices: bool = True) -> pd.DataFrame | None:
         weather = await self.weatherstore.get_data(start, end)
         if refresh_prices:
             prices = await self.pricestore.get_data(start, end)
@@ -95,26 +95,7 @@ class PricePredictor:
             prices = self.pricestore.get_known_data(start, end)
         auxdata = await self.auxstore.get_data(start, end)
 
-        # Get extended price history for lagged features (need 7+ days before start)
-        lag_start = start - timedelta(days=8)
-        latest_possible_prices = min(end, datetime.now(timezone.utc).replace(hour=23, minute=45))
-        await self.pricestore.fetch_missing_data(lag_start, latest_possible_prices)
-        historical_prices = self.pricestore.get_known_data(lag_start, end)
-
-        # Add lagged price features
-        periods_1d = 96  # 24 hours * 4 (15-min intervals)
-        periods_7d = 96 * 7
-
-        historical_prices = historical_prices.copy()
-        # Only use lagged features that look back 1+ days (no leakage possible)
-        historical_prices["price_lag_1d"] = historical_prices["price"].shift(periods_1d)
-        historical_prices["price_lag_7d"] = historical_prices["price"].shift(periods_7d)
-
-        # Extract just the lagged features and reindex to match weather data range
-        # This ensures we have rows for future dates where prices don't exist yet
-        lagged_features = historical_prices[["price_lag_1d", "price_lag_7d"]]
-
-        df = pd.concat([weather, auxdata, lagged_features], axis=1).ffill().dropna()
+        df = pd.concat([weather, auxdata], axis=1).dropna()
         df = pd.concat([df, prices], axis=1)
         return df
 
