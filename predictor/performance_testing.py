@@ -81,8 +81,6 @@ async def main():
         pred2 = await predictor.predict(d1, d2, False)
         pred3 = await predictor.predict(d2, d3, False)
 
-        # Some odd stuff happens during daylight sa
-
         d1_mae.append(mean_absolute_error(actual1["price"], pred1["price"]))
         d2_mae.append(mean_absolute_error(actual2["price"], pred2["price"]))
         d3_mae.append(mean_absolute_error(actual3["price"], pred3["price"]))

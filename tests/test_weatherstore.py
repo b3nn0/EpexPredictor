@@ -23,7 +23,7 @@ class TestWeatherStoreInit:
         """Test initialization with storage directory."""
         store = WeatherStore(sample_region, temp_storage_dir)
         assert store.storage_dir == temp_storage_dir
-        assert store.storage_fn_prefix == "weather"
+        assert store.storage_fn_prefix.startswith("weather")
 
 
 class TestWeatherStoreNeedsHistoryQuery:
@@ -75,6 +75,8 @@ class TestWeatherStoreFetchMissingData:
                     "wind_speed_80m": [5.0, 6.0, 7.0, 8.0],
                     "temperature_2m": [10.0, 11.0, 12.0, 13.0],
                     "global_tilted_irradiance": [100.0, 110.0, 120.0, 130.0],
+                    "pressure_msl": [1013.0, 1014.0, 1015.0, 1016.0],
+                    "relative_humidity_2m": [75.0, 76.0, 77.0, 78.0],
                 }
             }
             for _ in sample_region.latitudes

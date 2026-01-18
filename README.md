@@ -29,6 +29,8 @@ Weather features (per sample location):
 - Wind speed at 80m
 - Temperature at 2m
 - Global tilted irradiance (solar)
+- Air pressure at mean sea level
+- Relative humidity
 
 Time features:
 - Azimuth of the sun as indicator of time of day
@@ -57,10 +59,10 @@ Remarks:
 Results (1-day ahead prediction):
 | Country | MAE (ct/kWh) | RMSE (ct/kWh) |
 |---------|--------------|---------------|
-| DE | 1.75 | 2.77 |
-| AT | 1.95 | 3.05 |
-| BE | 1.82 | 2.72 |
-| NL | 1.82 | 2.79 |
+| DE | 1.70 | 2.65 |
+| AT | 1.90 | 2.96 |
+| BE | 1.78 | 2.61 |
+| NL | 1.79 | 2.72 |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh
