@@ -25,7 +25,7 @@ class WeatherStore(DataStore):
     
 
     def __init__(self, region : PriceRegion, storage_dir: str|None =None):
-        super().__init__(region, storage_dir, "weather")
+        super().__init__(region, storage_dir, "weather_v2")
         self.update_lock = asyncio.Lock()
 
     async def refresh_range(self, rstart: datetime, rend: datetime) -> bool:
@@ -39,7 +39,7 @@ class WeatherStore(DataStore):
             else:
                 host = "api.open-meteo.com"
 
-            url = f"https://{host}/v1/forecast?latitude={lats}&longitude={lons}&azimuth=0&tilt=0&start_date={rstart.date().isoformat()}&end_date={rend.date().isoformat()}&minutely_15=wind_speed_80m,temperature_2m,global_tilted_irradiance&timezone=UTC"
+            url = f"https://{host}/v1/forecast?latitude={lats}&longitude={lons}&azimuth=0&tilt=0&start_date={rstart.date().isoformat()}&end_date={rend.date().isoformat()}&minutely_15=wind_speed_80m,temperature_2m,global_tilted_irradiance,pressure_msl,relative_humidity_2m&timezone=UTC"
             log.info(f"Fetching weather data for {self.region.bidding_zone}: {url}")
 
             tries = 0
@@ -52,15 +52,15 @@ class WeatherStore(DataStore):
                             data = json.loads(data)
                             frames = []
                             for i, fc in enumerate(data):
-                                df = pd.DataFrame(columns=["time", f"wind_{i}", f"temp_{i}"])
-                                times = fc["minutely_15"]["time"]
-                                winds = fc["minutely_15"]["wind_speed_80m"]
-                                temps = fc["minutely_15"]["temperature_2m"]
-                                irradiance = fc["minutely_15"]["global_tilted_irradiance"]
-                                df["time"] = times
-                                df[f"irradiance_{i}"] = irradiance
-                                df[f"wind_{i}"] = winds
-                                df[f"temp_{i}"] = temps
+                                df = pd.DataFrame()
+
+                                df["time"] = fc["minutely_15"]["time"]
+                                df[f"wind_{i}"] = fc["minutely_15"]["wind_speed_80m"]
+                                df[f"temp_{i}"] = fc["minutely_15"]["temperature_2m"]
+                                df[f"irradiance_{i}"] = fc["minutely_15"]["global_tilted_irradiance"]
+                                df[f"pressure_{i}"] = fc["minutely_15"]["pressure_msl"]        
+                                df[f"humidity_{i}"] = fc["minutely_15"]["relative_humidity_2m"]
+                                
                                 df.set_index("time", inplace=True)
                                 df = df.dropna()
                                 frames.append(df)

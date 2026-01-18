@@ -3,7 +3,6 @@ import logging
 import statistics
 from datetime import datetime, timedelta, timezone
 from typing import Generator, cast
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 from astral import Observer, sun
@@ -53,7 +52,7 @@ class AuxDataStore(DataStore):
         """
         Careful: will be called in separate thread
         """
-        tzlocal = ZoneInfo(self.region.timezone)
+        tzlocal = self.region.get_timezone_info()
 
         # make it full day to be sure
         rstart = rstart.replace(hour=0, minute=0, second=0, microsecond=0)

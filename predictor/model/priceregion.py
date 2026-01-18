@@ -1,4 +1,5 @@
 from enum import Enum
+from zoneinfo import ZoneInfo
 
 import holidays
 
@@ -42,6 +43,9 @@ class PriceRegion(Enum):
         else:
             for subdiv in country_holidays.subdivisions:
                 self.holidays.append(holidays.country_holidays(country=self.country_code, subdiv=subdiv))
+
+    def get_timezone_info(self):
+        return ZoneInfo(self.timezone)
 
 
     DE = (

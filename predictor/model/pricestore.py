@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 class PriceStore(DataStore):
     """
-    Fetches and caches price info from api.weather data from api.energy-charts.info
+    Fetches and caches price info from api.energy-charts.info
     TODO: add more price sources, e.g. for SE1-SE4, which is not available from energy-charts
     """
 
@@ -39,8 +39,10 @@ class PriceStore(DataStore):
             updated = False
 
             for rstart, rend in self.gen_missing_date_ranges(start, end):
-                start_formatted = rstart.replace(hour=0, minute=0, second=0, microsecond=0).isoformat().replace("+00:00", "Z")
-                end_formatted = (rend.replace(hour=23, minute=59, second=0, microsecond=0) + timedelta(minutes=1)).isoformat().replace("+00:00", "Z")
+                start_of_day = rstart.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_of_day = rend.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                start_formatted = start_of_day.isoformat().replace("+00:00", "Z")
+                end_formatted = end_of_day.isoformat().replace("+00:00", "Z")
                 url = f"https://api.energy-charts.info/price?bzn={self.region.bidding_zone}&start={start_formatted}&end={end_formatted}"
                 log.info(f"Fetching price data for {self.region.bidding_zone}: {url}")
                 async with aiohttp.ClientSession() as session:
@@ -56,9 +58,16 @@ class PriceStore(DataStore):
                         df.index = pd.to_datetime(df.index, unit="s", utc=True)
                         df.index.name = "time"
                         df["price"] = df["price"] / 10
-                        # Resample old hourly data to 15 minutes so it matches weather data - used during performance testing
+
                         df.sort_index(inplace=True)
-                        df = df.resample('15min').ffill()
+
+                        # for some regions there seem to be a few datapoints missing, and this code doesn't fill out the whole time range.. ffill it
+                        if df.index[-1] < end_of_day:
+                            df[end_of_day] = None
+                        if df.index[0] > start_of_day:
+                            df[start_of_day] = None
+
+                        df = df.resample('15min').ffill().bfill() # ensure whole range is covered with 15 minute slots
 
                         self._update_data(df)
                         updated = True
