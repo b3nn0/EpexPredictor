@@ -26,7 +26,7 @@ class PriceStore(DataStore):
     
 
     def __init__(self, region : PriceRegion, storage_dir=None):
-        super().__init__(region, storage_dir, "prices_v2")
+        super().__init__(region, storage_dir, "prices_v3")
         self.update_lock = asyncio.Lock()
 
 
@@ -61,13 +61,7 @@ class PriceStore(DataStore):
 
                         df.sort_index(inplace=True)
 
-                        # for some regions there seem to be a few datapoints missing, and this code doesn't fill out the whole time range.. ffill it
-                        if df.index[-1] < end_of_day:
-                            df[end_of_day] = None
-                        if df.index[0] > start_of_day:
-                            df[start_of_day] = None
-
-                        df = df.resample('15min').ffill().bfill() # ensure whole range is covered with 15 minute slots
+                        df = df.resample('15min').ffill()
 
                         self._update_data(df)
                         updated = True
