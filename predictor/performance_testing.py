@@ -4,6 +4,7 @@ import asyncio
 import logging
 import math
 from datetime import datetime, timedelta
+from typing import cast
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
@@ -12,6 +13,7 @@ from model.auxdatastore import AuxDataStore
 from model.priceregion import PriceRegion
 from model.pricestore import PriceStore
 from model.weatherstore import WeatherStore
+from model.datastore import DataStore
 
 START: datetime = datetime.fromisoformat("2025-01-17T00:00:00Z")
 END: datetime = datetime.fromisoformat("2026-01-17T00:00:00Z")
@@ -24,28 +26,13 @@ logging.basicConfig(
 )
 
 
+async def load_data(store_class, cache_dir) -> DataStore:
+    store = store_class(REGION, cache_dir)
+    await store.fetch_missing_data(START - timedelta(days=LEARN_DAYS), END)
+    return store
 
-async def load_weather() -> WeatherStore:
-    weatherstore = WeatherStore(REGION, ".")
-    await weatherstore.fetch_missing_data(START - timedelta(days=LEARN_DAYS), END)
-    return weatherstore
-
-async def load_prices() -> PriceStore:
-    pricestore = PriceStore(REGION, ".")
-    await pricestore.fetch_missing_data(START - timedelta(days=LEARN_DAYS), END)
-    return pricestore
-
-async def load_aux() -> AuxDataStore:
-    aux = AuxDataStore(REGION)
-    await aux.fetch_missing_data(START - timedelta(days=LEARN_DAYS), END)
-    return aux
 
 async def main():
-    #pd.set_option("display.max_rows", None)
-    weather = await load_weather()
-    prices = await load_prices()
-    aux = await load_aux()
-
     learn_start = START - timedelta(days=LEARN_DAYS)
     learn_end = START
 
@@ -58,9 +45,10 @@ async def main():
     d3_mse = []
 
     predictor = pred.PricePredictor(REGION)
-    predictor.weatherstore = weather
-    predictor.pricestore = prices
-    predictor.auxstore = aux
+    # preload data for whole time range to reduce individual http requests
+    predictor.weatherstore = cast(WeatherStore, await load_data(WeatherStore, "."))
+    predictor.pricestore = cast(PriceStore, await load_data(PriceStore, "."))
+    predictor.auxstore = cast(AuxDataStore, await load_data(AuxDataStore, None))
     iterations = 0
 
     while learn_end < END - timedelta(days=3):
@@ -74,9 +62,9 @@ async def main():
         await predictor.train(learn_start, learn_end)
 
 
-        actual1 = await prices.get_data(d0, d1)
-        actual2 = await prices.get_data(d1, d2)
-        actual3 = await prices.get_data(d2, d3)
+        actual1 = await predictor.pricestore.get_data(d0, d1)
+        actual2 = await predictor.pricestore.get_data(d1, d2)
+        actual3 = await predictor.pricestore.get_data(d2, d3)
         pred1 = await predictor.predict(d0, d1, False)
         pred2 = await predictor.predict(d1, d2, False)
         pred3 = await predictor.predict(d2, d3, False)

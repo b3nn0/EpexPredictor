@@ -58,10 +58,11 @@ class PriceStore(DataStore):
                         df.index = pd.to_datetime(df.index, unit="s", utc=True)
                         df.index.name = "time"
                         df["price"] = df["price"] / 10
-
-                        df.sort_index(inplace=True)
-
-                        df = df.resample('15min').ffill()
+                        
+                        # for BE, a few hours are missing in late september.. make sure they are filled or stuff will get out of hand
+                        # TODO: this will become an issue if we ever have a region where a whole day or so is missing, and the df is empty.
+                        # will solve that when needed.
+                        df = df.sort_index().resample('15min').ffill().bfill()
 
                         self._update_data(df)
                         updated = True
