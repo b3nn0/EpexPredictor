@@ -59,25 +59,24 @@ async def main():
         d2 = learn_end + timedelta(days=2)
         d3 = learn_end + timedelta(days=3)
 
-        await predictor.train(learn_start, learn_end)
+        # Make sure training/prediction doesn't "cheat" with data that is known during performance testing, but not for actual forecasts
+        predictor.pricestore.horizon_cutoff = learn_end
+
+        await predictor.train(learn_start, learn_end - timedelta(minutes=15)) # exclusive last
+        prediction = await predictor.predict(d0, d3, False)
+
+        predictor.pricestore.horizon_cutoff = None
+        actual = await predictor.pricestore.get_data(d0, d3)
 
 
-        actual1 = await predictor.pricestore.get_data(d0, d1)
-        actual2 = await predictor.pricestore.get_data(d1, d2)
-        actual3 = await predictor.pricestore.get_data(d2, d3)
-        pred1 = await predictor.predict(d0, d1, False)
-        pred2 = await predictor.predict(d1, d2, False)
-        pred3 = await predictor.predict(d2, d3, False)
+        d1_mae.append(mean_absolute_error(actual.loc[d0:d1]["price"], prediction.loc[d0:d1]["price"]))
+        d2_mae.append(mean_absolute_error(actual.loc[d1:d2]["price"], prediction.loc[d1:d2]["price"]))
+        d3_mae.append(mean_absolute_error(actual.loc[d2:d3]["price"], prediction.loc[d2:d3]["price"]))
 
-        d1_mae.append(mean_absolute_error(actual1["price"], pred1["price"]))
-        d2_mae.append(mean_absolute_error(actual2["price"], pred2["price"]))
-        d3_mae.append(mean_absolute_error(actual3["price"], pred3["price"]))
+        d1_mse.append(mean_squared_error(actual.loc[d0:d1]["price"], prediction.loc[d0:d1]["price"]))
+        d2_mse.append(mean_squared_error(actual.loc[d1:d2]["price"], prediction.loc[d1:d2]["price"]))
+        d3_mse.append(mean_squared_error(actual.loc[d2:d3]["price"], prediction.loc[d2:d3]["price"]))
         
-        d1_mse.append(mean_squared_error(actual1["price"], pred1["price"]))
-        d2_mse.append(mean_squared_error(actual2["price"], pred2["price"]))
-        d3_mse.append(mean_squared_error(actual3["price"], pred3["price"]))
-
-
         learn_start += timedelta(days=1)
         learn_end += timedelta(days=1)
         iterations += 1
