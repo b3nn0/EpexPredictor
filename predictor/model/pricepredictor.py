@@ -3,7 +3,7 @@
 import logging
 import math
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Tuple, cast
+from typing import Dict, cast
 
 import pandas as pd
 import lightgbm as lgb
@@ -97,15 +97,8 @@ class PricePredictor:
 
         df = pd.concat([weather, auxdata], axis=1).dropna()
         df = pd.concat([df, prices], axis=1)
+
         return df
-
-    def get_last_known_price(self) -> Tuple[datetime, float] | None:
-        prices = self.pricestore.data
-        if len(prices) == 0:
-            return None
-        lastrow = prices.dropna().reset_index().iloc[-1]
-        return lastrow["time"].to_pydatetime(), float(lastrow["price"])
-
 
     async def refresh_weather(self, start : datetime, end: datetime):
         """
@@ -120,17 +113,16 @@ class PricePredictor:
         """
         true if actual new prices are available
         """
-        lastknown = self.get_last_known_price()
+        lastknown = self.pricestore.get_last_known()
         if lastknown is None:
             return True
-        lastdt, _ = lastknown
 
-        updated = await self.pricestore.fetch_missing_data(lastdt, datetime.now(timezone.utc) + timedelta(days=3))
+        updated = await self.pricestore.fetch_missing_data(lastknown, datetime.now(timezone.utc) + timedelta(days=3))
         if not updated:
             return False
 
-        lastafter = self.get_last_known_price()
-        return lastafter is not None and lastafter[0] != lastdt
+        lastafter = self.pricestore.get_last_known()
+        return lastafter is not None and lastafter != lastknown
     
     def cleanup(self):
         """

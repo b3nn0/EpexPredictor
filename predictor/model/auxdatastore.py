@@ -85,22 +85,22 @@ class AuxDataStore(DataStore):
 
 
     def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
-        start = start.replace(hour=12, minute=0, second=0, microsecond=0)
+        start = start.replace(minute=0, second=0, microsecond=0)
 
         curr = start
 
         rangestart = None
         while curr <= end:
-            next_day = curr + timedelta(days=1)
+            next = curr + timedelta(minutes=15)
 
-            if rangestart is not None and (next_day in self.data.index or next_day > end):
+            if rangestart is not None and (next in self.data.index or next > end):
                 yield (rangestart, curr)
                 rangestart = None
 
             if rangestart is None and curr not in self.data.index:
                 rangestart = curr
 
-            curr = next_day
+            curr = next
 
 
     def is_holiday(self, t : pd.Timestamp) -> float:

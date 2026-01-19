@@ -15,11 +15,13 @@ class DataStore:
     Base class for caching data store with delta-fetching and serialization
     """
 
-    data : pd.DataFrame
-    region : PriceRegion
-    storage_dir : str|None
-    storage_fn_prefix : str|None
+    data: pd.DataFrame
+    region: PriceRegion
+    storage_dir: str|None
+    storage_fn_prefix: str|None
     
+    # Used during model performance evaluation to not accidently access prices we shouldn't know about yet
+    horizon_cutoff: datetime|None = None
 
     def __init__(self, region : PriceRegion, storage_dir: str|None = None, storage_fn_prefix: str|None = None):
         self.data = pd.DataFrame()
@@ -29,18 +31,32 @@ class DataStore:
 
         self.load()
 
+
     def get_known_data(self, start: datetime, end: datetime) -> pd.DataFrame:
+        if self.horizon_cutoff and self.horizon_cutoff < end:
+            end = self.horizon_cutoff
         return self.data.loc[start:end]
     
     async def get_data(self, start: datetime, end: datetime) -> pd.DataFrame:
         start = start.astimezone(timezone.utc)
         end = end.astimezone(timezone.utc)
         await self.fetch_missing_data(start, end)
+
+        if self.horizon_cutoff and self.horizon_cutoff < end:
+            end = self.horizon_cutoff
         return self.data.loc[start:end]
     
     @abc.abstractmethod
     async def fetch_missing_data(self, start: datetime, end: datetime) -> pd.DataFrame:
         pass
+
+    def get_last_known(self) -> datetime|None:
+        data = self.data
+        if self.horizon_cutoff:
+            data = data[:self.horizon_cutoff]
+        if len(data) == 0:
+            return None
+        return data.dropna().reset_index().iloc[-1]["time"]
 
 
     def drop_after(self, dt: datetime):
@@ -54,9 +70,7 @@ class DataStore:
         self.data = self.data[self.data.index >= pd.to_datetime(dt, utc=True)]
 
     def _update_data(self, df: pd.DataFrame):
-        df = df.dropna()
-        combined = pd.concat([self.data, df])
-        self.data = combined[~combined.index.duplicated(keep='last')].sort_index()
+        self.data = df.combine_first(self.data).dropna() # keeps new data from df, fills it with existing data from self
 
 
     def get_storage_file(self):

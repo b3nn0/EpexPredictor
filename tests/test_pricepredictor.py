@@ -33,7 +33,7 @@ class TestPricePredictorGetLastKnownPrice:
     def test_get_last_known_price_empty_store(self, sample_region):
         """Test get_last_known_price with empty price store."""
         predictor = PricePredictor(sample_region)
-        result = predictor.get_last_known_price()
+        result = predictor.pricestore.get_last_known()
         assert result is None
 
     def test_get_last_known_price_with_data(self, sample_region):
@@ -48,12 +48,9 @@ class TestPricePredictorGetLastKnownPrice:
         df.index.name = "time"
         predictor.pricestore._update_data(df)
 
-        result = predictor.get_last_known_price()
+        result = predictor.pricestore.get_last_known()
         assert result is not None
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        assert isinstance(result[0], datetime)
-        assert isinstance(result[1], float)
+        assert isinstance(result, datetime)
 
 
 class TestPricePredictorToPriceDict:
@@ -227,7 +224,7 @@ class TestPricePredictorRefreshMethods:
         df.index.name = "time"
         predictor.pricestore._update_data(df)
 
-        initial_last = predictor.get_last_known_price()
+        initial_last = predictor.pricestore.get_last_known()
 
         # Mock fetch to return True and add new data
         def add_new_data(start, end):
@@ -244,8 +241,8 @@ class TestPricePredictorRefreshMethods:
         result = await predictor.refresh_prices()
 
         assert result is True
-        new_last = predictor.get_last_known_price()
-        assert new_last[0] > initial_last[0]
+        new_last = predictor.pricestore.get_last_known()
+        assert new_last > initial_last
 
     @pytest.mark.asyncio
     async def test_refresh_prices_returns_false_when_timestamp_unchanged(self, sample_region):

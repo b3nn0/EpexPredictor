@@ -99,7 +99,7 @@ class RegionPriceManager:
     last_weather_update : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
     last_price_update : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
 
-    last_known_price : tuple[datetime, float] = (datetime.now(timezone.utc), 0)
+    last_known_price : datetime = datetime.now(timezone.utc)
 
     cachedprices : Dict[datetime, float] = {}
     cachedeval : Dict[datetime, float] = {}
@@ -153,7 +153,7 @@ class RegionPriceManager:
 
         if format == OutputFormat.SHORT:
             return self.format_short(prices)
-        return PricesModel(prices=prices, known_until=self.last_known_price[0].astimezone(tz))
+        return PricesModel(prices=prices, known_until=self.last_known_price.astimezone(tz))
 
         
     def format_short(self, prices: List[PriceModel]) -> PricesModelShort:
@@ -181,18 +181,18 @@ class RegionPriceManager:
             self.is_currently_updating = True
 
             # Update prices every 12 hours. If it's after 13:00 local, and we don't have prices for the next day yet, update every 5 minutes
-            latest_price = self.predictor.get_last_known_price()
+            latest_price = self.predictor.pricestore.get_last_known()
             price_update_frequency = 12 * 60 * 60
-            if latest_price is None or (latest_price[0] - datetime.now(timezone.utc)).total_seconds() <= 60 * 60 * 11:
+            if latest_price is None or (latest_price - datetime.now(timezone.utc)).total_seconds() <= 60 * 60 * 11:
                 price_update_frequency = 5 * 60
 
             retrain = False
             if price_age.total_seconds() > price_update_frequency:
                 self.last_price_update = currts
                 if await self.predictor.refresh_prices():
-                    lastknown = self.predictor.get_last_known_price()
+                    lastknown = self.predictor.pricestore.get_last_known()
                     if lastknown is not None:
-                        log.info(f"Prices updated, now available until {lastknown[0].isoformat()}")
+                        log.info(f"Prices updated, now available until {lastknown.isoformat()}")
                     retrain = True
 
 
@@ -212,7 +212,7 @@ class RegionPriceManager:
                 newprices, neweval = await self.predictor.predict(train_start, train_end), await self.predictor.predict(train_start, train_end, fill_known=False)
                 self.cachedprices = self.predictor.to_price_dict(newprices)
                 self.cachedeval = self.predictor.to_price_dict(neweval)
-                lastknown = self.predictor.get_last_known_price()
+                lastknown = self.predictor.pricestore.get_last_known()
                 if lastknown is not None:
                     self.last_known_price = lastknown
 

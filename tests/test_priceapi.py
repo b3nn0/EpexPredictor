@@ -256,7 +256,7 @@ class TestRegionPriceManagerPrices:
             base_time: 10.0,
             base_time + timedelta(minutes=15): 11.0,
         }
-        manager.last_known_price = (base_time + timedelta(hours=1), 12.0)
+        manager.last_known_price = base_time + timedelta(hours=1)
 
         # Mock update_in_background to do nothing
         manager.update_in_background = AsyncMock()
@@ -283,7 +283,7 @@ class TestRegionPriceManagerPrices:
         manager.cachedprices = {
             base_time: 10.0,
         }
-        manager.last_known_price = (base_time + timedelta(hours=1), 12.0)
+        manager.last_known_price = base_time + timedelta(hours=1)
 
         manager.update_in_background = AsyncMock()
 
@@ -312,7 +312,7 @@ class TestRegionPriceManagerPrices:
             base_time + timedelta(minutes=30): 14.0,
             base_time + timedelta(minutes=45): 16.0,
         }
-        manager.last_known_price = (base_time + timedelta(hours=2), 12.0)
+        manager.last_known_price = base_time + timedelta(hours=2)
 
         manager.update_in_background = AsyncMock()
 
@@ -346,8 +346,8 @@ class TestRegionPriceManagerUpdateDataIfNeeded:
             return_value=MagicMock(empty=False)
         )
         manager.predictor.to_price_dict = MagicMock(return_value={})
-        manager.predictor.get_last_known_price = MagicMock(
-            return_value=(datetime.now(timezone.utc), 10.0)
+        manager.predictor.pricestore.get_last_known = MagicMock(
+            return_value=datetime.now(timezone.utc)
         )
         manager.predictor.cleanup = MagicMock()
 

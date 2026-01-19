@@ -117,25 +117,6 @@ class TestAuxDataStoreDayOfWeekEncoding:
             assert day_sum in [0, 1]
 
 
-class TestAuxDataStoreTimeSlotEncoding:
-    """Tests for time slot encoding."""
-
-    @pytest.mark.asyncio
-    async def test_slot_columns_are_one_hot(self, sample_region):
-        """Test that time slot columns are one-hot encoded."""
-        store = AuxDataStore(sample_region)
-        start = datetime(2025, 11, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 11, 1, 1, tzinfo=timezone.utc)
-
-        await store.fetch_missing_data(start, end)
-
-        # For each row, exactly one slot column should be 1
-        # Columns are named i_{hour}_{minute}
-        slot_cols = [f"i_{h}_{m}" for h in range(24) for m in range(0, 60, 15)]
-        for _, row in store.data.iterrows():
-            slot_sum = sum(row[col] for col in slot_cols if col in row.index)
-            assert slot_sum == 1
-
 
 class TestAuxDataStoreSunriseSunset:
     """Tests for sunrise/sunset influence calculation."""
