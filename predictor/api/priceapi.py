@@ -351,7 +351,13 @@ async def generate_evaluation_plot(
     plt.close(plot.figure)
 
     img_data.seek(0)
-    return Response(content=img_data.read(), media_type="image/png")
+
+    response = Response(content=img_data.read(), media_type="image/png")
+    response.headers.update({
+        "Cache-Control": "max-age=60"
+    })
+
+    return response
 
 
 
