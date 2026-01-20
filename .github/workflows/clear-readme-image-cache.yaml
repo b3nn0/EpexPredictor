@@ -8,4 +8,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: wow-actions/purge-readme@v1
-        branch: main
+        with:
+          branch: main
