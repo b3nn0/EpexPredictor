@@ -2,6 +2,8 @@ name: "Clear github README image cache"
 on:
   schedule:
   - cron: "30 * * * *"
+  push:
+    branches: [ "main" ]
 
 jobs:
   run:
