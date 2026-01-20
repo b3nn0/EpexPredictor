@@ -1,0 +1,11 @@
+name: "Clear github README image cache"
+on:
+  schedule:
+  - cron: "30 * * * *"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: wow-actions/purge-readme@v1
+        branch: main
