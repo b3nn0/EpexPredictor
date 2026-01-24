@@ -27,7 +27,7 @@ There are no guarantees on availability or correctnes of the data.
 This is an open source project, feel free to host it yourself. [Source code and docs](https://github.com/b3nn0/EpexPredictor)
 
 ### Attribution
-Electricity prices provided under CC-BY-4.0 by [energy-charts.info](https://api.energy-charts.info/)
+Electricity prices provided under CC-BY-4.0 by [energy-charts.info](https://api.energy-charts.info/) and [ENTSO-E](https://www.entsoe.eu/)
 
 [Weather data by Open-Meteo.com](https://open-meteo.com/)
 """)

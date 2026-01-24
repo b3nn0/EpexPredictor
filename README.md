@@ -22,7 +22,10 @@ Supported Countries:
 ## The Model
 We sample multiple locations distributed across each country. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=120).
 This serves as the main data source.
-Price data is provided under CC BY 4.0 by smartd.de, retrieved via https://api.energy-charts.info/.
+
+Price data is provided under CC BY 4.0 by smartd.de, retrieved via [api.energy-charts.info](https://api.energy-charts.info/) and [ENTSO-E transparency platform](https://transparency.entsoe.eu/).
+
+Grid load data is provided by [ENTSO-E transparency platform](https://transparency.entsoe.eu/).
 
 ### Features
 

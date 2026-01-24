@@ -9,13 +9,15 @@
             "type": "debugpy",
             "request": "launch",
             "program": "predictor/performance_testing.py",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "justMyCode": false,
         },
         {
             "name": "Python Debugger: FastAPI",
             "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
+            "justMyCode": false,
             "args": [
                 "predictor.api.priceapi:app",
                 "--reload"
