@@ -1,7 +1,8 @@
 import abc
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from typing import Generator
 
 import pandas as pd
 
@@ -21,7 +22,12 @@ class DataStore:
     storage_fn_prefix: str|None
     
     # Used during model performance evaluation to not accidently access prices we shouldn't know about yet
-    horizon_cutoff: datetime|None = None
+    horizon_cutoff: datetime|None
+
+    # actually known horizon limit of the data source. Do not query missing data after the actual source horizon constantly
+    known_source_horizon: datetime|None
+    # when is next revalidation due?
+    source_horizon_revalitation_ts: datetime|None
 
     def __init__(self, region : PriceRegion, storage_dir: str|None = None, storage_fn_prefix: str|None = None):
         self.data = pd.DataFrame()
@@ -29,18 +35,40 @@ class DataStore:
         self.storage_dir = storage_dir
         self.storage_fn_prefix = storage_fn_prefix
 
+        self.horizon_cutoff = None
+        self.known_source_horizon = None
+        self.source_horizon_revalitation_ts = None
+
         self.load()
 
+    def set_source_horizon(self, horizon: datetime, revalidation_ts: datetime|None):
+        self.known_source_horizon = horizon
+        self.source_horizon_revalitation_ts = revalidation_ts
 
-    def get_known_data(self, start: datetime, end: datetime) -> pd.DataFrame:
-        if self.horizon_cutoff and self.horizon_cutoff < end:
-            end = self.horizon_cutoff
-        return self.data.loc[start:end]
+    def apply_horizon(self, start: datetime, end: datetime) -> tuple[datetime, datetime]:
+        if self.horizon_cutoff:
+            start = min(start, self.horizon_cutoff)
+            end = min(end, self.horizon_cutoff)
+
+        if self.known_source_horizon and (self.source_horizon_revalitation_ts is None or datetime.now(timezone.utc) < self.source_horizon_revalitation_ts):
+            start = min(start, self.known_source_horizon)
+            end = min(end, self.known_source_horizon)
+        return (start, end)
+    
+
     
     async def get_data(self, start: datetime, end: datetime) -> pd.DataFrame:
         start = start.astimezone(timezone.utc)
         end = end.astimezone(timezone.utc)
+        start, end = self.apply_horizon(start, end)
+
         await self.fetch_missing_data(start, end)
+
+        last_known = self.get_last_known()
+        if last_known and last_known < end:
+            # source horizon reached - remember/reschedule source query
+            self.known_source_horizon = last_known
+            self.source_horizon_revalitation_ts = self.get_next_horizon_revalidation_time()
 
         if self.horizon_cutoff and self.horizon_cutoff < end:
             end = self.horizon_cutoff
@@ -50,13 +78,35 @@ class DataStore:
     async def fetch_missing_data(self, start: datetime, end: datetime) -> pd.DataFrame:
         pass
 
+    @abc.abstractmethod
+    def get_next_horizon_revalidation_time(self) -> datetime|None:
+        pass
+
+
+    def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
+        curr = start.replace(minute=0, second=0, microsecond=0)
+
+        rangestart = None
+        while curr <= end:
+            next = curr + timedelta(minutes=15)
+
+            if rangestart is not None and (next in self.data.index or next > end):
+                # We have the next timeslot already OR its the last timeslot
+                yield (rangestart, curr)
+                rangestart = None
+
+            if rangestart is None and curr not in self.data.index:
+                rangestart = curr
+
+            curr = next
+
     def get_last_known(self) -> datetime|None:
         data = self.data
         if self.horizon_cutoff:
             data = data[:self.horizon_cutoff]
         if len(data) == 0:
             return None
-        return data.dropna().reset_index().iloc[-1]["time"]
+        return data.index[-1]
 
 
     def drop_after(self, dt: datetime):
@@ -78,18 +128,18 @@ class DataStore:
             return None
         if not os.path.exists(self.storage_dir):
             os.makedirs(self.storage_dir)
-        return f"{self.storage_dir}/{self.storage_fn_prefix}_{self.region.bidding_zone}.json.gz"
+        return f"{self.storage_dir}/{self.storage_fn_prefix}_{self.region.bidding_zone_entsoe}.json.gz"
 
     def serialize(self):
         fn = self.get_storage_file()
         if fn is not None:
-            log.info(f"storing new {self.storage_fn_prefix} data for {self.region.bidding_zone}")
+            log.info(f"storing new {self.storage_fn_prefix} data for {self.region.bidding_zone_entsoe}")
             self.data.to_json(fn, compression='gzip')
     
     def load(self):
         fn = self.get_storage_file()
         if fn is not None and os.path.exists(fn):
-            log.info(f"loading persisted {self.storage_fn_prefix} data for {self.region.bidding_zone}")
+            log.info(f"loading persisted {self.storage_fn_prefix} data for {self.region.bidding_zone_entsoe}")
             self.data = pd.read_json(fn, compression='gzip')
 
             # Handle index type: to_json saves DatetimeIndex as epoch milliseconds,

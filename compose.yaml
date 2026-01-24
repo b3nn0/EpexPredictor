@@ -11,4 +11,9 @@ services:
     
     environment:
       - EPEXPREDICTOR_DATADIR=/data/
+      # It is highly recommended that you request Entso-E API access and configure the key here. It serves as
+      # 1. It serves as an additional source for price data, in case energy-charts is down
+      # 2. It is required to source prices fore some regions (e.g. sweden)
+      # 3. It offers an electical load forecast, significantly improving model performance
+      # - EPEXPREDICTOR_ENTSOE_API_KEY=
 

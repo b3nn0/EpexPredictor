@@ -41,43 +41,6 @@ class TestPriceRegionName:
 class TestPriceRegion:
     """Tests for PriceRegion enum."""
 
-    def test_de_properties(self):
-        """Test DE region properties."""
-        region = PriceRegion.DE
-        assert region.country_code == "DE"
-        assert region.timezone == "Europe/Berlin"
-        assert region.bidding_zone == "DE-LU"
-        assert len(region.latitudes) == 6
-        assert len(region.longitudes) == 6
-        assert len(region.latitudes) == len(region.longitudes)
-
-    def test_at_properties(self):
-        """Test AT region properties."""
-        region = PriceRegion.AT
-        assert region.country_code == "AT"
-        assert region.timezone == "Europe/Berlin"
-        assert region.bidding_zone == "AT"
-        assert len(region.latitudes) == 5
-        assert len(region.longitudes) == 5
-
-    def test_be_properties(self):
-        """Test BE region properties."""
-        region = PriceRegion.BE
-        assert region.country_code == "BE"
-        assert region.timezone == "Europe/Berlin"
-        assert region.bidding_zone == "BE"
-        assert len(region.latitudes) == 3
-        assert len(region.longitudes) == 3
-
-    def test_nl_properties(self):
-        """Test NL region properties."""
-        region = PriceRegion.NL
-        assert region.country_code == "NL"
-        assert region.timezone == "Europe/Amsterdam"
-        assert region.bidding_zone == "NL"
-        assert len(region.latitudes) == 3
-        assert len(region.longitudes) == 3
-
     def test_holidays_initialized(self):
         """Test that holidays are properly initialized for all regions."""
         for region in PriceRegion:

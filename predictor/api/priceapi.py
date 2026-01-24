@@ -175,31 +175,22 @@ class RegionPriceManager:
         try:
             currts = datetime.now(timezone.utc)
 
-            price_age = currts - self.last_price_update
             weather_age = currts - self.last_weather_update
 
-            self.is_currently_updating = True
+            retrain = False
 
             # Update prices every 12 hours. If it's after 13:00 local, and we don't have prices for the next day yet, update every 5 minutes
             latest_price = self.predictor.pricestore.get_last_known()
-            price_update_frequency = 12 * 60 * 60
-            if latest_price is None or (latest_price - datetime.now(timezone.utc)).total_seconds() <= 60 * 60 * 11:
-                price_update_frequency = 5 * 60
-
-            retrain = False
-            if price_age.total_seconds() > price_update_frequency:
-                self.last_price_update = currts
-                if await self.predictor.refresh_prices():
-                    lastknown = self.predictor.pricestore.get_last_known()
-                    if lastknown is not None:
-                        log.info(f"Prices updated, now available until {lastknown.isoformat()}")
-                    retrain = True
+            if latest_price and latest_price > self.last_known_price:
+                log.info(f"Prices were updated - triggering model retrain for {self.predictor.region.bidding_zone_entsoe}")
+                self.last_known_price = latest_price
+                retrain = True
 
 
             if weather_age.total_seconds() > 60 * 60 * 3:  # update weather every 3 hours
                 start = datetime.now(timezone.utc) - timedelta(days=1)
                 end = datetime.now(timezone.utc) + timedelta(days=8)
-                await self.predictor.refresh_weather(start, end)
+                await self.predictor.refresh_forecasts(start, end)
                 self.last_weather_update = currts
                 retrain = True
 
@@ -233,10 +224,10 @@ class Prices:
             self.region_prices[region] = RegionPriceManager(region)
         return await self.region_prices[region].prices(hours, fixed_price, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
     
-    def get_predictor(self, region):
+    def get_price_manager(self, region):
         if region not in self.region_prices:
             self.region_prices[region] = RegionPriceManager(region)
-        return self.region_prices[region].predictor
+        return self.region_prices[region]
 
 
 prices_handler = Prices()
@@ -319,12 +310,12 @@ async def generate_evaluation_plot(
         raise HTTPException(status_code=400, detail="endTs must be after startTs")
 
     # reuse the same data stores for a unified cache
-    orig_predictor = prices_handler.get_predictor(region.to_region())
+    pricemanager = prices_handler.get_price_manager(region.to_region())
+    await pricemanager.update_data_if_needed()
+    orig_predictor = pricemanager.predictor
     
     predictor = pp.PricePredictor(region.to_region())
-    predictor.weatherstore = orig_predictor.weatherstore
-    predictor.pricestore = orig_predictor.pricestore
-    predictor.auxstore = orig_predictor.auxstore
+    predictor.use_datastores_from(orig_predictor)
 
     learn_start = start_ts - timedelta(days=TRAINING_DAYS)
     learn_end = start_ts
@@ -333,11 +324,7 @@ async def generate_evaluation_plot(
     predicted = await predictor.predict(start_ts, end_ts, fill_known=False)
     predicted = predicted.rename(columns={"price": "predicted"})
 
-    # make sure we don't refetch future price data with each request - only force-fetch until today.
-    # Later price might be returned if the main price API already fetched it.
-    latest_price_to_fetch = min(end_ts, now)
-    await predictor.pricestore.fetch_missing_data(start_ts, latest_price_to_fetch)
-    actual = predictor.pricestore.get_known_data(start_ts, end_ts)
+    actual = await predictor.pricestore.get_data(start_ts, end_ts)
     actual = actual.rename(columns={"price": "actual"})
 
     merged = pd.concat([predicted, actual])

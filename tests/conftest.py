@@ -3,7 +3,7 @@
 import asyncio
 import tempfile
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pandas as pd
 import pytest
@@ -120,6 +120,23 @@ def sample_aux_data():
     df.index.name = "time"
     return df
 
+@pytest.fixture
+def sample_entsoe_data():
+    dates = pd.date_range(
+        start="2025-11-01",
+        end="2025-11-02",
+        freq="15min",
+        tz="UTC"
+    )
+    data = {
+        "maxload": [500] * len(dates),
+        "minload" : [500] * len(dates)
+    }
+    df = pd.DataFrame(data, index=dates)
+    df.index.name = "time"
+    return df
+
+
 
 @pytest.fixture
 def mock_aiohttp_response():
@@ -147,7 +164,7 @@ def extended_price_data():
 
 @pytest.fixture
 def mocked_predictor(
-    sample_region, sample_weather_data, sample_price_data, sample_aux_data, extended_price_data
+    sample_region, sample_weather_data, sample_price_data, sample_aux_data, sample_entsoe_data, extended_price_data
 ):
     """Create a PricePredictor with all stores mocked."""
     from predictor.model.pricepredictor import PricePredictor
@@ -155,6 +172,6 @@ def mocked_predictor(
     predictor = PricePredictor(sample_region)
     predictor.weatherstore.get_data = AsyncMock(return_value=sample_weather_data)
     predictor.pricestore.get_data = AsyncMock(return_value=sample_price_data)
-    predictor.pricestore.get_known_data = MagicMock(return_value=extended_price_data)
     predictor.auxstore.get_data = AsyncMock(return_value=sample_aux_data)
+    predictor.entsoestore.get_data = AsyncMock(return_value=sample_entsoe_data)
     return predictor

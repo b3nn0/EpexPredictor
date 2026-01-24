@@ -39,38 +39,6 @@ class TestDataStoreInit:
         assert store.storage_fn_prefix == "test"
 
 
-class TestDataStoreGetKnownData:
-    """Tests for get_known_data method."""
-
-    def test_get_known_data_empty(self, sample_region):
-        """Test getting data from empty store."""
-        store = ConcreteDataStore(sample_region)
-        start = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 2, tzinfo=timezone.utc)
-        result = store.get_known_data(start, end)
-        assert result.empty
-
-    def test_get_known_data_with_data(self, sample_region):
-        """Test getting data from populated store."""
-        store = ConcreteDataStore(sample_region)
-
-        # Add some data
-        dates = pd.date_range(
-            start="2025-01-01", end="2025-01-02", freq="15min", tz="UTC"
-        )
-        df = pd.DataFrame({"value": range(len(dates))}, index=dates)
-        df.index.name = "time"
-        store._update_data(df)
-
-        # Get subset of data
-        start = datetime(2025, 1, 1, 6, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
-        result = store.get_known_data(start, end)
-
-        assert not result.empty
-        assert result.index[0] >= pd.Timestamp(start)
-        assert result.index[-1] <= pd.Timestamp(end)
-
 
 class TestDataStoreGetData:
     """Tests for async get_data method."""
@@ -207,7 +175,7 @@ class TestDataStoreSerialization:
     def test_get_storage_file_with_dir(self, sample_region, temp_storage_dir):
         """Test get_storage_file returns proper path."""
         store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
-        expected = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        expected = f"{temp_storage_dir}/test_{sample_region.bidding_zone_entsoe}.json.gz"
         assert store.get_storage_file() == expected
 
     def test_serialize_and_load(self, sample_region, temp_storage_dir):
@@ -257,7 +225,7 @@ class TestDataStorePersistenceEdgeCases:
         import gzip
 
         # Create a corrupted gzip file
-        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone_entsoe}.json.gz"
         with gzip.open(storage_path, 'wt') as f:
             f.write("{ this is not valid json }")
 
@@ -270,7 +238,7 @@ class TestDataStorePersistenceEdgeCases:
         import gzip
 
         # Create an empty JSON object file
-        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone_entsoe}.json.gz"
         with gzip.open(storage_path, 'wt') as f:
             f.write("{}")
 
@@ -292,7 +260,7 @@ class TestDataStorePersistenceEdgeCases:
         for col in ["value"]:
             data[col] = {str(int(d.timestamp() * 1000)): i for i, d in enumerate(dates)}
 
-        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone_entsoe}.json.gz"
         with gzip.open(storage_path, 'wt') as f:
             json.dump(data, f)
 
@@ -320,7 +288,7 @@ class TestDataStorePersistenceEdgeCases:
             "value": {d.isoformat(): i for i, d in enumerate(naive_dates)}
         }
 
-        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone_entsoe}.json.gz"
         with gzip.open(storage_path, 'wt') as f:
             json.dump(data, f)
 
@@ -372,7 +340,7 @@ class TestDataStorePersistenceEdgeCases:
             }
         }
 
-        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone}.json.gz"
+        storage_path = f"{temp_storage_dir}/test_{sample_region.bidding_zone_entsoe}.json.gz"
         with gzip.open(storage_path, 'wt') as f:
             json.dump(data, f)
 

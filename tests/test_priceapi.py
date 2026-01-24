@@ -339,8 +339,7 @@ class TestRegionPriceManagerUpdateDataIfNeeded:
         manager = RegionPriceManager(sample_region)
 
         # Mock predictor methods
-        manager.predictor.refresh_prices = AsyncMock(return_value=True)
-        manager.predictor.refresh_weather = AsyncMock()
+        manager.predictor.refresh_forecasts = AsyncMock()
         manager.predictor.train = AsyncMock()
         manager.predictor.predict = AsyncMock(
             return_value=MagicMock(empty=False)
@@ -354,4 +353,4 @@ class TestRegionPriceManagerUpdateDataIfNeeded:
         await manager.update_data_if_needed()
 
         # Should have called refresh methods
-        assert manager.predictor.refresh_prices.called
+        assert manager.predictor.refresh_forecasts.called

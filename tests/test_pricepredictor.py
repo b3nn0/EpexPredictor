@@ -1,7 +1,7 @@
 """Tests for predictor.model.pricepredictor module."""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pandas as pd
 import pytest
@@ -19,6 +19,7 @@ class TestPricePredictorInit:
         assert predictor.weatherstore is not None
         assert predictor.pricestore is not None
         assert predictor.auxstore is not None
+        assert predictor.entsoestore is not None
 
     def test_init_with_storage_dir(self, sample_region, temp_storage_dir):
         """Test initialization with storage directory."""
@@ -80,7 +81,7 @@ class TestPricePredictorPrepareDataframe:
 
     @pytest.mark.asyncio
     async def test_prepare_dataframe_combines_data(
-        self, sample_region, sample_weather_data, sample_price_data, sample_aux_data
+        self, sample_region, sample_weather_data, sample_price_data, sample_aux_data, sample_entsoe_data
     ):
         """Test that prepare_dataframe combines all data sources."""
         predictor = PricePredictor(sample_region)
@@ -88,13 +89,13 @@ class TestPricePredictorPrepareDataframe:
         # Mock the stores to return our sample data
         predictor.weatherstore.get_data = AsyncMock(return_value=sample_weather_data)
         predictor.pricestore.get_data = AsyncMock(return_value=sample_price_data)
-        predictor.pricestore.get_known_data = MagicMock(return_value=sample_price_data)
         predictor.auxstore.get_data = AsyncMock(return_value=sample_aux_data)
+        predictor.entsoestore.get_data = AsyncMock(return_value=sample_entsoe_data)
 
         start = datetime(2025, 11, 1, tzinfo=timezone.utc)
         end = datetime(2025, 11, 2, tzinfo=timezone.utc)
 
-        result = await predictor.prepare_dataframe(start, end, refresh_prices=True)
+        result = await predictor.prepare_dataframe(start, end)
 
         assert result is not None
         assert not result.empty
@@ -180,93 +181,12 @@ class TestPricePredictorCleanup:
 
 
 class TestPricePredictorRefreshMethods:
-    """Tests for refresh_prices and refresh_weather methods."""
+    """Tests for refresh_prices and refresh_forecasts methods."""
+
 
     @pytest.mark.asyncio
-    async def test_refresh_prices_returns_true_when_no_initial_data(self, sample_region):
-        """refresh_prices returns True when no initial data exists."""
-        predictor = PricePredictor(sample_region)
-        # No data in price store, so get_last_known_price() returns None
-        result = await predictor.refresh_prices()
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_refresh_prices_returns_false_when_no_new_data(self, sample_region):
-        """refresh_prices returns False when fetch_missing_data returns False."""
-        predictor = PricePredictor(sample_region)
-
-        # Add initial data
-        dates = pd.date_range(
-            start="2025-11-01", end="2025-11-02", freq="15min", tz="UTC"
-        )
-        df = pd.DataFrame({"price": [8.0] * len(dates)}, index=dates)
-        df.index.name = "time"
-        predictor.pricestore._update_data(df)
-
-        # Mock fetch to return False (no new data)
-        predictor.pricestore.fetch_missing_data = AsyncMock(return_value=False)
-
-        result = await predictor.refresh_prices()
-
-        assert result is False
-        assert predictor.pricestore.fetch_missing_data.called
-
-    @pytest.mark.asyncio
-    async def test_refresh_prices_returns_true_when_timestamp_advances(self, sample_region):
-        """refresh_prices returns True when new data is fetched and timestamp advances."""
-        predictor = PricePredictor(sample_region)
-
-        # Add initial data
-        initial_dates = pd.date_range(
-            start="2025-11-01", end="2025-11-02", freq="15min", tz="UTC"
-        )
-        df = pd.DataFrame({"price": [8.0] * len(initial_dates)}, index=initial_dates)
-        df.index.name = "time"
-        predictor.pricestore._update_data(df)
-
-        initial_last = predictor.pricestore.get_last_known()
-
-        # Mock fetch to return True and add new data
-        def add_new_data(start, end):
-            new_dates = pd.date_range(
-                start="2025-11-02", end="2025-11-03", freq="15min", tz="UTC"
-            )
-            new_df = pd.DataFrame({"price": [9.0] * len(new_dates)}, index=new_dates)
-            new_df.index.name = "time"
-            predictor.pricestore._update_data(new_df)
-            return True
-
-        predictor.pricestore.fetch_missing_data = AsyncMock(side_effect=add_new_data)
-
-        result = await predictor.refresh_prices()
-
-        assert result is True
-        new_last = predictor.pricestore.get_last_known()
-        assert new_last > initial_last
-
-    @pytest.mark.asyncio
-    async def test_refresh_prices_returns_false_when_timestamp_unchanged(self, sample_region):
-        """refresh_prices returns False when fetch returns True but timestamp unchanged."""
-        predictor = PricePredictor(sample_region)
-
-        # Add initial data
-        dates = pd.date_range(
-            start="2025-11-01", end="2025-11-02", freq="15min", tz="UTC"
-        )
-        df = pd.DataFrame({"price": [8.0] * len(dates)}, index=dates)
-        df.index.name = "time"
-        predictor.pricestore._update_data(df)
-
-        # Mock fetch to return True but don't add new data (timestamp stays same)
-        predictor.pricestore.fetch_missing_data = AsyncMock(return_value=True)
-
-        result = await predictor.refresh_prices()
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_refresh_weather(self, sample_region):
-        """Test refresh_weather method."""
+    async def test_refresh_forecasts(self, sample_region):
+        """Test refresh_forecasts method."""
         predictor = PricePredictor(sample_region)
 
         # Mock the weather store's refresh_range method (not fetch_missing_data)
@@ -275,7 +195,7 @@ class TestPricePredictorRefreshMethods:
         start = datetime(2025, 11, 1, tzinfo=timezone.utc)
         end = datetime(2025, 11, 8, tzinfo=timezone.utc)
 
-        await predictor.refresh_weather(start, end)
+        await predictor.refresh_forecasts(start, end)
 
         # Should have called refresh_range
         assert predictor.weatherstore.refresh_range.called
@@ -301,13 +221,12 @@ class TestPricePredictorLaggedFeatures:
         # Mock the stores
         predictor.weatherstore.get_data = AsyncMock(return_value=sample_weather_data)
         predictor.pricestore.get_data = AsyncMock(return_value=price_data.loc["2025-11-01":"2025-11-02"])
-        predictor.pricestore.get_known_data = MagicMock(return_value=price_data)
         predictor.auxstore.get_data = AsyncMock(return_value=sample_aux_data)
 
         start = datetime(2025, 11, 1, tzinfo=timezone.utc)
         end = datetime(2025, 11, 2, tzinfo=timezone.utc)
 
-        df = await predictor.prepare_dataframe(start, end, refresh_prices=True)
+        df = await predictor.prepare_dataframe(start, end)
 
         # Check that lagged features exist
         assert df is not None

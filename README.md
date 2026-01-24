@@ -39,8 +39,7 @@ Time features:
 - Holiday/Sunday indicator (regional holidays weighted by fraction of regions, e.g. 0.5 if half the regions have the holiday)
 - Sunrise influence: how many minutes between sunrise and the current time slot
 - Sunset influence: how many minutes between sunset and the current time slot
-- Morning influence: how many minutes between now and 6AM today
-- Evening influence: how many minutes between now and 6PM today
+- Entso-E load forecast (optional, but highly recommended)
 
 Output:
 - Electricity price
@@ -59,10 +58,10 @@ Remarks:
 Results (1-day ahead prediction):
 | Country | MAE (ct/kWh) | RMSE (ct/kWh) |
 |---------|--------------|---------------|
-| DE | 1.70 | 2.65 |
-| AT | 1.90 | 2.96 |
-| BE | 1.78 | 2.61 |
-| NL | 1.79 | 2.72 |
+| DE | 1.61 | 2.44 |
+| AT | 1.86 | 2.83 |
+| BE | 1.75 | 2.54 |
+| NL | 1.81 | 2.74 |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh
@@ -84,6 +83,11 @@ Get a glimpse of the current prediction [here](https://epexpredictor.batzill.com
 
 There are no guarantees given whatsoever - it might work for you or not.
 I might stop or block this service at any time. Fair use is expected!
+
+# Self Hosting
+You can easily self-host this software. For easy deployment, check out the docker compose file.
+You will probably want to register with Entso-E and request an API key.
+Without Entso-E API access, some parameters are missing and the model will perform significantly worse.
 
 # Home Assistant integration
 At some point, I might create a HA addon to run everything locally.

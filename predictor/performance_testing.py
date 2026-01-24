@@ -4,19 +4,15 @@ import asyncio
 import logging
 import math
 from datetime import datetime, timedelta
-from typing import cast
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import model.pricepredictor as pred
-from model.auxdatastore import AuxDataStore
 from model.priceregion import PriceRegion
-from model.pricestore import PriceStore
-from model.weatherstore import WeatherStore
-from model.datastore import DataStore
 
-START: datetime = datetime.fromisoformat("2025-01-17T00:00:00Z")
-END: datetime = datetime.fromisoformat("2026-01-17T00:00:00Z")
+
+START: datetime = datetime.fromisoformat("2025-01-24T00:00:00Z")
+END: datetime = datetime.fromisoformat("2026-01-24T00:00:00Z")
 REGION : PriceRegion = PriceRegion.DE
 LEARN_DAYS : int = 120
 
@@ -26,10 +22,15 @@ logging.basicConfig(
 )
 
 
-async def load_data(store_class, cache_dir) -> DataStore:
-    store = store_class(REGION, cache_dir)
-    await store.fetch_missing_data(START - timedelta(days=LEARN_DAYS), END)
-    return store
+async def load_data(p : pred.PricePredictor):
+    """
+    preload data for whole time range to reduce individual http requests
+    """
+    learn_start = START - timedelta(days=LEARN_DAYS)
+    await p.weatherstore.fetch_missing_data(learn_start, END)
+    await p.pricestore.fetch_missing_data(learn_start, END)
+    await p.entsoestore.fetch_missing_data(learn_start, END)
+    await p.auxstore.fetch_missing_data(learn_start, END)
 
 
 async def main():
@@ -44,11 +45,9 @@ async def main():
     d3_mae = []
     d3_mse = []
 
-    predictor = pred.PricePredictor(REGION)
-    # preload data for whole time range to reduce individual http requests
-    predictor.weatherstore = cast(WeatherStore, await load_data(WeatherStore, "."))
-    predictor.pricestore = cast(PriceStore, await load_data(PriceStore, "."))
-    predictor.auxstore = cast(AuxDataStore, await load_data(AuxDataStore, None))
+    predictor = pred.PricePredictor(REGION, ".")
+    await load_data(predictor)
+
     iterations = 0
 
     while learn_end < END - timedelta(days=3):

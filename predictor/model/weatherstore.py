@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Generator
+from typing import Generator, override
 
 import aiohttp
 import pandas as pd
@@ -28,6 +28,10 @@ class WeatherStore(DataStore):
         super().__init__(region, storage_dir, "weather_v2")
         self.update_lock = asyncio.Lock()
 
+    @override
+    def get_next_horizon_revalidation_time(self) -> datetime | None:
+        return datetime.now(timezone.utc) + timedelta(hours=6)
+
     async def refresh_range(self, rstart: datetime, rend: datetime) -> bool:
         async with self.update_lock:
             lats = ",".join(map(str, self.region.latitudes))
@@ -40,7 +44,7 @@ class WeatherStore(DataStore):
                 host = "api.open-meteo.com"
 
             url = f"https://{host}/v1/forecast?latitude={lats}&longitude={lons}&azimuth=0&tilt=0&start_date={rstart.date().isoformat()}&end_date={rend.date().isoformat()}&minutely_15=wind_speed_80m,temperature_2m,global_tilted_irradiance,pressure_msl,relative_humidity_2m&timezone=UTC"
-            log.info(f"Fetching weather data for {self.region.bidding_zone}: {url}")
+            log.info(f"Fetching weather data for {self.region.bidding_zone_entsoe}: {url}")
 
             tries = 0
             while True:
@@ -82,7 +86,7 @@ class WeatherStore(DataStore):
 
 
             if updated:
-                log.info(f"weather data updated for {self.region.bidding_zone}")
+                log.info(f"weather data updated for {self.region.bidding_zone_entsoe}")
                 self.data.sort_index(inplace=True)
                 self.serialize()
             return updated
@@ -98,6 +102,7 @@ class WeatherStore(DataStore):
 
         return updated
 
+    @override
     def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
         # a random hour of the day so we can easily check if we already have that day.
         # OpenMeteo only has full day queries anyway.

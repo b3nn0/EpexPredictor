@@ -2,7 +2,7 @@ import asyncio
 import logging
 import statistics
 from datetime import datetime, timedelta, timezone
-from typing import Generator, cast
+from typing import cast, override
 
 import pandas as pd
 from astral import Observer, sun
@@ -28,7 +28,7 @@ class AuxDataStore(DataStore):
         super().__init__(region)
         self.update_lock = asyncio.Lock()
 
-
+    @override
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
         start = start.astimezone(timezone.utc)
         end = end.astimezone(timezone.utc)
@@ -42,11 +42,14 @@ class AuxDataStore(DataStore):
                     updated = True
 
             if updated:
-                log.info(f"aux data updated for {self.region.bidding_zone}")
+                log.info(f"aux data updated for {self.region.bidding_zone_entsoe}")
                 self.data.sort_index(inplace=True)
                 self.serialize()
             return updated
-        
+    
+    @override
+    def get_next_horizon_revalidation_time(self) -> datetime|None:
+        return None
 
     def _compute_data(self, rstart: datetime, rend: datetime) -> pd.DataFrame:
         """
@@ -76,33 +79,14 @@ class AuxDataStore(DataStore):
         df["sr_influence"] = df["time"].apply(lambda t: (t - sun.sunrise(observer, date=t)).total_seconds())
         df["ss_influence"] = df["time"].apply(lambda t: (t - sun.sunset(observer, date=t)).total_seconds())
 
-        df["morningpeak"] = df["time"].apply(lambda t: (t - t.replace(hour=6, minute=0)).total_seconds())
-        df["eveningpeak"]  = df["time"].apply(lambda t: (t - t.replace(hour=18, minute=0)).total_seconds())
+        df["morningpeak"] = df["time"].apply(lambda t: (t - t.replace(hour=8, minute=0)).total_seconds())
+        df["eveningpeak"]  = df["time"].apply(lambda t: (t - t.replace(hour=19, minute=0)).total_seconds())
 
         df.set_index("time", inplace=True)
         return df
 
 
-
-    def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
-        start = start.replace(minute=0, second=0, microsecond=0)
-
-        curr = start
-
-        rangestart = None
-        while curr <= end:
-            next = curr + timedelta(minutes=15)
-
-            if rangestart is not None and (next in self.data.index or next > end):
-                yield (rangestart, curr)
-                rangestart = None
-
-            if rangestart is None and curr not in self.data.index:
-                rangestart = curr
-
-            curr = next
-
-
+    
     def is_holiday(self, t : pd.Timestamp) -> float:
         if t.weekday() == 6:
             return 1

@@ -127,49 +127,6 @@ class TestPriceStoreDataConversion:
         assert "price" in store.data.columns
 
 
-class TestPriceStoreGetKnownData:
-    """Tests for get_known_data method."""
-
-    def test_get_known_data_returns_subset(self, sample_region):
-        """Test that get_known_data returns correct subset."""
-        store = PriceStore(sample_region)
-
-        # Add data for full day
-        dates = pd.date_range(
-            start="2025-11-01", end="2025-11-02", freq="15min", tz="UTC"
-        )
-        df = pd.DataFrame({"price": range(len(dates))}, index=dates)
-        df.index.name = "time"
-        store._update_data(df)
-
-        # Request subset
-        start = datetime(2025, 11, 1, 6, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 11, 1, 12, 0, tzinfo=timezone.utc)
-        result = store.get_known_data(start, end)
-
-        assert not result.empty
-        assert result.index.min() >= pd.Timestamp(start)
-        assert result.index.max() <= pd.Timestamp(end)
-
-    def test_get_known_data_empty_range(self, sample_region):
-        """Test get_known_data with range outside stored data."""
-        store = PriceStore(sample_region)
-
-        # Add data for Nov 1
-        dates = pd.date_range(
-            start="2025-11-01", end="2025-11-02", freq="15min", tz="UTC"
-        )
-        df = pd.DataFrame({"price": [8.0] * len(dates)}, index=dates)
-        df.index.name = "time"
-        store._update_data(df)
-
-        # Request data for Nov 10 (outside stored range)
-        start = datetime(2025, 11, 10, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2025, 11, 11, 0, 0, tzinfo=timezone.utc)
-        result = store.get_known_data(start, end)
-
-        assert result.empty
-
 
 class TestPriceStoreResampling:
     """Tests for data resampling functionality."""

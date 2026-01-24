@@ -12,6 +12,7 @@ from .auxdatastore import AuxDataStore
 from .priceregion import PriceRegion
 from .pricestore import PriceStore
 from .weatherstore import WeatherStore
+from .entsoedatastore import EntsoeDataStore
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class PricePredictor:
     region: PriceRegion
     weatherstore: WeatherStore
     pricestore: PriceStore
+    entsoestore: EntsoeDataStore
     auxstore: AuxDataStore
 
     traindata: pd.DataFrame | None = None
@@ -31,13 +33,22 @@ class PricePredictor:
         self.weatherstore = WeatherStore(region, storage_dir)
         self.pricestore = PriceStore(region, storage_dir)
         self.auxstore = AuxDataStore(region, storage_dir)
+        self.entsoestore = EntsoeDataStore(region, storage_dir)
+
+
+    def use_datastores_from(self, other: "PricePredictor"):
+        assert self.region.bidding_zone_entsoe == other.region.bidding_zone_entsoe
+        self.weatherstore = other.weatherstore
+        self.pricestore = other.pricestore
+        self.auxstore = other.auxstore
+        self.entsoestore = other.entsoestore
 
     def is_trained(self) -> bool:
         return self.predictor is not None
 
 
     async def train(self, start: datetime, end: datetime):
-        self.traindata = await self.prepare_dataframe(start, end, True)
+        self.traindata = await self.prepare_dataframe(start, end)
         if self.traindata is None:
             return
         self.traindata.dropna(inplace=True)
@@ -60,7 +71,7 @@ class PricePredictor:
     async def predict(self, start: datetime, end: datetime, fill_known=True) -> pd.DataFrame:
         assert self.is_trained() and self.predictor is not None
 
-        df = await self.prepare_dataframe(start, end, False)
+        df = await self.prepare_dataframe(start, end)
         assert df is not None
 
         prices_known = df["price"]
@@ -87,43 +98,27 @@ class PricePredictor:
 
 
 
-    async def prepare_dataframe(self, start: datetime, end: datetime, refresh_prices: bool = True) -> pd.DataFrame | None:
+    async def prepare_dataframe(self, start: datetime, end: datetime) -> pd.DataFrame | None:
         weather = await self.weatherstore.get_data(start, end)
-        if refresh_prices:
-            prices = await self.pricestore.get_data(start, end)
-        else:
-            prices = self.pricestore.get_known_data(start, end)
+        prices = await self.pricestore.get_data(start, end)
+        entsoedata = await self.entsoestore.get_data(start, end)
         auxdata = await self.auxstore.get_data(start, end)
 
-        df = pd.concat([weather, auxdata], axis=1).dropna()
+        df = pd.concat([weather, auxdata, entsoedata], axis=1)
         df = pd.concat([df, prices], axis=1)
 
         return df
 
-    async def refresh_weather(self, start : datetime, end: datetime):
+    async def refresh_forecasts(self, start : datetime, end: datetime):
         """
             Will re-fetch everything starting from yesterday during next training
             Not sure when past data becomes "stable", so better be sure and fetch a bit more
             TODO: might want to make this more robust to keep old weather data in case OpenMeteo is not reachable
         """
         await self.weatherstore.refresh_range(start, end)
+        await self.entsoestore.refresh_range(start, end)
 
 
-    async def refresh_prices(self) -> bool:
-        """
-        true if actual new prices are available
-        """
-        lastknown = self.pricestore.get_last_known()
-        if lastknown is None:
-            return True
-
-        updated = await self.pricestore.fetch_missing_data(lastknown, datetime.now(timezone.utc) + timedelta(days=3))
-        if not updated:
-            return False
-
-        lastafter = self.pricestore.get_last_known()
-        return lastafter is not None and lastafter != lastknown
-    
     def cleanup(self):
         """
         Delete data older than 1 year
