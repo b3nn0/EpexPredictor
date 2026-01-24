@@ -77,7 +77,7 @@ class PriceRegion(Enum):
     )
     NL = (
         "NL",
-        TZ_CENTRAL_EUROPEAN,
+        "Europe/Amsterdam",
         "NL",
         "NL",
         [52.69, 52.36, 50.51],

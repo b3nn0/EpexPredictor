@@ -7,7 +7,7 @@ aiohttp
 astral
 fastapi[standard]
 lightgbm
-entsoe-py
+entsoe-py @ git+https://github.com/EnergieID/entsoe-py.git@b62938c
 
 # Testing dependencies
 pytest
