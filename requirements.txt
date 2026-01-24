@@ -1,13 +1,15 @@
 holidays
 scikit-learn
-pandas
+pandas<=2.3.3 # current entsoe-py can't handle newer pandas properly yet..
 matplotlib
 numpy
 aiohttp
 astral
 fastapi[standard]
 lightgbm
-entsoe-py @ git+https://github.com/EnergieID/entsoe-py.git@b62938c
+# @ git+https://github.com/EnergieID/entsoe-py.git@b62938c <- doesn't seem to work properly during docker build?!
+entsoe-py
+
 
 # Testing dependencies
 pytest
