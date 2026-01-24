@@ -12,6 +12,7 @@ Supported Countries:
 - Austria
 - Belgium
 - Netherlands
+- Sweden (SE1-SE4)
 - Others can be added relatively easily, if there is interest
 
 
@@ -39,7 +40,7 @@ Time features:
 - Holiday/Sunday indicator (regional holidays weighted by fraction of regions, e.g. 0.5 if half the regions have the holiday)
 - Sunrise influence: how many minutes between sunrise and the current time slot
 - Sunset influence: how many minutes between sunset and the current time slot
-- Entso-E load forecast (optional, but highly recommended)
+- Entso-E load forecast (optional, but highly recommended, especially for DE and AT)
 
 Output:
 - Electricity price
@@ -91,7 +92,9 @@ I might stop or block this service at any time. Fair use is expected!
 # Self Hosting
 You can easily self-host this software. For easy deployment, check out the docker compose file.
 You will probably want to register with Entso-E and request an API key.
-Without Entso-E API access, some parameters are missing and the model will perform significantly worse.
+Without Entso-E API access
+- some parameters are missing and the model will perform significantly worse, especially for DE and AT
+- Some regions will not be available (e.g. SE1-4)
 
 # Home Assistant integration
 At some point, I might create a HA addon to run everything locally.

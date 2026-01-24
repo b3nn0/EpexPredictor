@@ -120,10 +120,12 @@ class PriceStore(DataStore):
         try:
             if self.entsoe_api_key is None or self.region.bidding_zone_entsoe is None:
                 return None
-
+            # Entso-E always response a bit tight...
+            qstart = rstart - timedelta(days=1)
+            qend = rend + timedelta(days=2)
             logging.info(f"Fetching prices from {rstart.isoformat()} to {rend.isoformat()} from Entso-E")
             client = entsoe.EntsoePandasClient(api_key=self.entsoe_api_key)
-            prices_series = await asyncio.to_thread(client.query_day_ahead_prices, self.region.bidding_zone_entsoe, pd.to_datetime(rstart), pd.to_datetime(rend))
+            prices_series = await asyncio.to_thread(client.query_day_ahead_prices, self.region.bidding_zone_entsoe, pd.to_datetime(qstart), pd.to_datetime(qend))
             prices = prices_series.to_frame("price")
             prices["price"] = prices["price"] / 10
             prices.index = prices.index.tz_convert("UTC") # type: ignore
