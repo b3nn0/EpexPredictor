@@ -13,7 +13,17 @@ from model.priceregion import PriceRegion, PriceRegionName
 
 START: datetime = datetime.fromisoformat("2025-01-24T00:00:00Z")
 END: datetime = datetime.fromisoformat("2026-01-24T00:00:00Z")
-REGION : PriceRegion = PriceRegionName.DE.to_region()
+REGIONS = [
+    PriceRegionName.DE.to_region(),
+    PriceRegionName.AT.to_region(),
+    PriceRegionName.BE.to_region(),
+    PriceRegionName.NL.to_region(),
+    PriceRegionName.SE1.to_region(),
+    PriceRegionName.SE2.to_region(),
+    PriceRegionName.SE3.to_region(),
+    PriceRegionName.SE4.to_region(),
+]
+
 LEARN_DAYS : int = 120
 
 logging.basicConfig(
@@ -33,7 +43,7 @@ async def load_data(p : pred.PricePredictor):
     await p.auxstore.fetch_missing_data(learn_start, END)
 
 
-async def main():
+async def perform_test(region : PriceRegion):
     learn_start = START - timedelta(days=LEARN_DAYS)
     learn_end = START
 
@@ -45,7 +55,7 @@ async def main():
     d3_mae = []
     d3_mse = []
 
-    predictor = pred.PricePredictor(REGION, ".")
+    predictor = pred.PricePredictor(region, ".")
     await load_data(predictor)
 
     iterations = 0
@@ -83,11 +93,36 @@ async def main():
 
     print()
 
+    d1_mae_formatted = round(sum(d1_mae)/len(d1_mae), 2)
+    d1_rmse_formatted = round(math.sqrt(sum(d1_mse)/len(d1_mse)), 2)
+    
+    d2_mae_formatted = round(sum(d2_mae)/len(d2_mae), 2)
+    d2_rmse_formatted = round(math.sqrt(sum(d2_mse)/len(d2_mse)), 2)
 
-    print(f"iterations tested: {iterations}")
-    print(f"1d: RMSE={round(math.sqrt(sum(d1_mse)/len(d1_mse)), 2)}, MAE={round(sum(d1_mae)/len(d1_mae), 2)}")
-    print(f"2d: RMSE={round(math.sqrt(sum(d2_mse)/len(d2_mse)), 2)}, MAE={round(sum(d2_mae)/len(d2_mae), 2)}")
-    print(f"3d: RMSE={round(math.sqrt(sum(d3_mse)/len(d3_mse)), 2)}, MAE={round(sum(d3_mae)/len(d3_mae), 2)}")
+    d3_mae_formatted = round(sum(d3_mae)/len(d3_mae), 2)
+    d3_rmse_formatted = round(math.sqrt(sum(d3_mse)/len(d3_mse)), 2)
+
+
+
+    print(f"{region.bidding_zone_entsoe}: iterations tested: {iterations}")
+    print(f"1d: RMSE={d1_rmse_formatted}, MAE={d1_mae_formatted}")
+    print(f"2d: RMSE={d2_rmse_formatted}, MAE={d2_mae_formatted}")
+    print(f"3d: RMSE={d3_rmse_formatted}, MAE={d3_mae_formatted}")
+    return d1_mae_formatted, d1_rmse_formatted
+
+
+async def main():
+    results = []
+    for region in REGIONS:
+        mae, mse = await perform_test(region)
+        results.append((region, mae, mse))
+
+
+    
+    print("| Region | MAE (ct/kWh) | RMSE (ct/kWh) |")
+    print("|--------|--------------|---------------|")
+    for res in results:
+        print(f"| {res[0].bidding_zone_entsoe.ljust(5)}  | {str(res[1]).ljust(12)} | {str(res[2]).ljust(13)} |")
 
 
 

@@ -55,21 +55,21 @@ The model uses **LightGBM gradient boosting** to predict electricity prices. Lig
 For performance testing, see `predictor/performance_testing.py`.
 
 Remarks:
-- Tests were run in early 2026, with data from 2025-01-01 to 2026-01-11. The model is tuned for 15 minute pricing. Since data before 2025-10-01 were using hourly pricing, actual performance might be slightly better
+- Tests were run in early 2026, with data from 2025-01-24 to 2026-01-24. The model is tuned for 15 minute pricing. Since data before 2025-10-01 were using hourly pricing, actual performance might be slightly better
 - The model uses a 120-day rolling training window
 - Tests were done with historical weather data. If the weather forecast is wrong, performance might be slightly worse in practice
 
 Results (1-day ahead prediction):
-| Country | MAE (ct/kWh) | RMSE (ct/kWh) |
-|---------|--------------|---------------|
-| DE  | 1.61 | 2.44 |
-| AT  | 1.86 | 2.83 |
-| BE  | 1.75 | 2.54 |
-| NL  | 1.78 | 2.64 |
-| SE1 | 1.37 | 2.48 |
-| SE2 | 1.29 | 2.44 |
-| SE3 | 2.11 | 3.10 |
-| SE4 | 2.39 | 3.35 |
+| Region | MAE (ct/kWh) | RMSE (ct/kWh) |
+|--------|--------------|---------------|
+| DE_LU  | 1.61         | 2.43          |
+| AT     | 1.87         | 2.84          |
+| BE     | 1.74         | 2.53          |
+| NL     | 1.78         | 2.64          |
+| SE_1   | 1.37         | 2.48          |
+| SE_2   | 1.29         | 2.44          |
+| SE_3   | 2.11         | 3.1           |
+| SE_4   | 2.39         | 3.35          |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh
@@ -78,11 +78,11 @@ Some observations:
 - High PV noons are usually correctly detected with good accuracy
 
 
-### Current forecast
+### Current forecast (DE)
 ![image](https://epexpredictor.batzill.com/eval_plot?country=DE&transparent=false&width=1024&height=512)
 
 
-Feel free to generate your own performance evaluation graphs for any time range [here](https://epexpredictor.batzill.com/docs#/default/generate_evaluation_plot_eval_plot_get).
+Feel free to generate your own plot for other time ranges or regions [here](https://epexpredictor.batzill.com/docs#/default/generate_evaluation_plot_eval_plot_get).
 
 
 # Public API

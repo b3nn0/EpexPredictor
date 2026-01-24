@@ -11,6 +11,10 @@
             "program": "predictor/performance_testing.py",
             "console": "integratedTerminal",
             "justMyCode": false,
+            "env": {
+                "EPEXPREDICTOR_DATADIR": "${workspaceFolder}/data",
+            },
+            "envFile": "${workspaceFolder}/.secret",
         },
         {
             "name": "Python Debugger: FastAPI",
@@ -23,8 +27,9 @@
                 "--reload"
             ],
             "env": {
-                "EPEXPREDICTOR_DATADIR": "."
+                "EPEXPREDICTOR_DATADIR": "${workspaceFolder}/data",
             },
+            "envFile": "${workspaceFolder}/.secret",
             "jinja": true
         },
         {
@@ -35,8 +40,9 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "EPEXPREDICTOR_DATADIR": ".",
+                "EPEXPREDICTOR_DATADIR": "${workspaceFolder}/data",
             },
+            "envFile": "${workspaceFolder}/.secret",
         }
     ]
 }
