@@ -133,7 +133,10 @@ class RegionPriceManager:
 
         await self.update_in_background()
 
-        tz = ZoneInfo(timezone)
+        try:
+            tz = ZoneInfo(timezone)
+        except:
+            raise HTTPException(status_code=400, detail=f"Invalid timezone {timezone}")
         start_ts = self._normalize_start_ts(start_ts, tz)
         end_ts = start_ts + timedelta(hours=hours) if hours >= 0 else datetime(2999, 1, 1, tzinfo=tz)
 
