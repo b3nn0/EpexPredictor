@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import Enum
 from zoneinfo import ZoneInfo
 
@@ -7,38 +8,22 @@ import holidays
 TZ_CENTRAL_EUROPEAN = "Europe/Berlin"
 
 
-class PriceRegionName(str, Enum):
-    """
-    Only used for FastAPI so it only offers the pre-defined names
-    """
-    DE = "DE"
-    AT = "AT"
-    BE = "BE"
-    NL = "NL"
+PRICE_REGIONS = {}
 
-    def to_region(self):
-        return PriceRegion[self]
-
-
-class PriceRegion(Enum):
+@dataclass
+class PriceRegion:
     country_code: str
     timezone: str
     bidding_zone_energycharts: str | None
     bidding_zone_entsoe: str
     latitudes: list[float]
     longitudes: list[float]
-    holidays: list[holidays.HolidayBase] # one entry for each regional holiday set, e.g. one for BW, one for BY, ...
+
+    use_entsoe_load_forecast: bool = True
+    holidays: list[holidays.HolidayBase] = None # type:ignore # one entry for each regional holiday set, e.g. one for BW, one for BY, ...
     
 
-    def __init__ (self, country_code, timezone, bidding_zone_energycharts, bidding_zone_entsoe, latitudes, longitudes):
-        self.country_code = country_code
-        self.bidding_zone_energycharts = bidding_zone_energycharts
-        self.bidding_zone_entsoe = bidding_zone_entsoe
-        
-        self.timezone = timezone
-        self.latitudes = latitudes
-        self.longitudes = longitudes
-
+    def __post_init__(self):
         self.holidays = []
         country_holidays = holidays.country_holidays(self.country_code)
         if country_holidays.subdivisions is None or len(country_holidays.subdivisions) == 0:
@@ -51,37 +36,101 @@ class PriceRegion(Enum):
         return ZoneInfo(self.timezone)
 
 
-    DE = (
-        "DE",
-        TZ_CENTRAL_EUROPEAN,
-        "DE-LU",
-        "DE_LU",
-        [48.4, 49.7, 51.3, 52.8, 53.8, 54.1],
-        [9.3, 11.3, 8.6, 12.0, 8.1, 11.6],
-    )
-    AT = (
-        "AT",
-        TZ_CENTRAL_EUROPEAN,
-        "AT",
-        "AT",
-        [48.36, 48.27, 47.32, 47.00, 47.11],
-        [16.31, 13.85, 10.82, 13.54, 15.80],
-    )
-    BE = (
-        "BE",
-        TZ_CENTRAL_EUROPEAN,
-        "BE",
-        "BE",
-        [51.27, 50.73, 49.99],
-        [3.07, 4.79, 5.38],
-    )
-    NL = (
-        "NL",
-        "Europe/Amsterdam",
-        "NL",
-        "NL",
-        [52.69, 52.36, 50.51],
-        [6.11, 4.90, 5.41],
-    )
+class PriceRegionName(str, Enum):
+    """
+    Only used for FastAPI so it only offers the pre-defined names
+    """
+    DE = "DE"
+    AT = "AT"
+    BE = "BE"
+    NL = "NL"
+    #SE1 = "SE1"
+    #SE2 = "SE2"
+    #SE3 = "SE3"
+    #SE4 = "SE4"
+
+    def to_region(self):
+        return PRICE_REGIONS[self]
+
+
+PRICE_REGIONS[PriceRegionName.DE] = PriceRegion(
+    country_code="DE",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts="DE-LU",
+    bidding_zone_entsoe="DE_LU",
+    latitudes=[48.4, 49.7, 51.3, 52.8, 53.8, 54.1],
+    longitudes=[9.3, 11.3, 8.6, 12.0, 8.1, 11.6]
+)
+
+PRICE_REGIONS[PriceRegionName.AT] = PriceRegion(
+    country_code="AT",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts="AT",
+    bidding_zone_entsoe="AT",
+    latitudes=[48.36, 48.27, 47.32, 47.00, 47.11],
+    longitudes=[16.31, 13.85, 10.82, 13.54, 15.80],
+)
+
+PRICE_REGIONS[PriceRegionName.BE] = PriceRegion(
+    country_code="BE",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts="BE",
+    bidding_zone_entsoe="BE",
+    latitudes=[51.27, 50.73, 49.99],
+    longitudes=[3.07, 4.79, 5.38],
+)
+
+PRICE_REGIONS[PriceRegionName.NL] = PriceRegion(
+    country_code="NL",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts="NL",
+    bidding_zone_entsoe="NL",
+    latitudes=[52.69, 52.36, 50.51],
+    longitudes=[6.11, 4.90, 5.41],
+    use_entsoe_load_forecast=False
+)
+
+#PRICE_REGIONS[PriceRegionName.SE1] = PriceRegion(
+#    country_code="SE",
+#    timezone=TZ_CENTRAL_EUROPEAN,
+#    bidding_zone_energycharts=None,
+#    bidding_zone_entsoe="SE1",
+#    latitudes=[52.69, 52.36, 50.51],
+#    longitudes=[6.11, 4.90, 5.41],
+#    use_entsoe_load_forecast=False # not available for SE
+#)
+#
+#PRICE_REGIONS[PriceRegionName.SE2] = PriceRegion(
+#    country_code="SE",
+#    timezone=TZ_CENTRAL_EUROPEAN,
+#    bidding_zone_energycharts=None,
+#    bidding_zone_entsoe="SE2",
+#    latitudes=[52.69, 52.36, 50.51],
+#    longitudes=[6.11, 4.90, 5.41],
+#    use_entsoe_load_forecast=False # not available for SE
+#)
+#
+#PRICE_REGIONS[PriceRegionName.SE3] = PriceRegion(
+#    country_code="SE",
+#    timezone=TZ_CENTRAL_EUROPEAN,
+#    bidding_zone_energycharts=None,
+#    bidding_zone_entsoe="SE3",
+#    latitudes=[52.69, 52.36, 50.51],
+#    longitudes=[6.11, 4.90, 5.41],
+#    use_entsoe_load_forecast=False # not available for SE
+#)
+#
+#PRICE_REGIONS[PriceRegionName.SE4] = PriceRegion(
+#    country_code="SE",
+#    timezone=TZ_CENTRAL_EUROPEAN,
+#    bidding_zone_energycharts="SE4",
+#    bidding_zone_entsoe="SE_4",
+#    latitudes=[52.69, 52.36, 50.51],
+#    longitudes=[6.11, 4.90, 5.41],
+#    use_entsoe_load_forecast=False # not available for SE
+#)
+
+
+
 
 

@@ -135,7 +135,7 @@ class RegionPriceManager:
 
         try:
             tz = ZoneInfo(timezone)
-        except:
+        except Exception:
             raise HTTPException(status_code=400, detail=f"Invalid timezone {timezone}")
         start_ts = self._normalize_start_ts(start_ts, tz)
         end_ts = start_ts + timedelta(hours=hours) if hours >= 0 else datetime(2999, 1, 1, tzinfo=tz)
@@ -218,13 +218,13 @@ class RegionPriceManager:
 
 
 class Prices:
-    region_prices: Dict[PriceRegion, RegionPriceManager] = {}
+    region_prices: Dict[PriceRegionName, RegionPriceManager] = {}
 
     async def prices(self, hours: int = -1, fixed_price: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
-                    region: PriceRegion = PriceRegion.DE, unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
+                    region: PriceRegionName = PriceRegionName.DE, unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
                     timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG):
         if region not in self.region_prices:
-            self.region_prices[region] = RegionPriceManager(region)
+            self.region_prices[region] = RegionPriceManager(region.to_region())
         return await self.region_prices[region].prices(hours, fixed_price, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
     
     def get_price_manager(self, region):
@@ -250,7 +250,7 @@ async def get_prices(
     """
     Get price prediction - verbose output format with objects containing full ISO timestamp and price
     """
-    res = await prices_handler.prices(hours, fixed_price, tax_percent, start_ts, region.to_region(), unit, evaluation, hourly, timezone, format=OutputFormat.LONG)
+    res = await prices_handler.prices(hours, fixed_price, tax_percent, start_ts, region, unit, evaluation, hourly, timezone, format=OutputFormat.LONG)
     assert isinstance(res, PricesModel)
     return res
 
@@ -269,7 +269,7 @@ async def get_prices_short(
     """
     Get price prediction - short output format with unix timestamp array and price array
     """
-    res = await prices_handler.prices(hours, fixed_price, tax_percent, start_ts, region.to_region(), unit, evaluation, hourly, timezone, format=OutputFormat.SHORT)
+    res = await prices_handler.prices(hours, fixed_price, tax_percent, start_ts, region, unit, evaluation, hourly, timezone, format=OutputFormat.SHORT)
     assert isinstance(res, PricesModelShort)
     return res
 
@@ -313,7 +313,7 @@ async def generate_evaluation_plot(
         raise HTTPException(status_code=400, detail="endTs must be after startTs")
 
     # reuse the same data stores for a unified cache
-    pricemanager = prices_handler.get_price_manager(region.to_region())
+    pricemanager = prices_handler.get_price_manager(region)
     await pricemanager.update_data_if_needed()
     orig_predictor = pricemanager.predictor
     

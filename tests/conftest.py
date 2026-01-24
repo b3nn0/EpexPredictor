@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pandas as pd
 import pytest
 
-from predictor.model.priceregion import PriceRegion
+from predictor.model.priceregion import PriceRegionName
 
 
 @pytest.fixture(scope="session")
@@ -29,7 +29,7 @@ def temp_storage_dir():
 @pytest.fixture
 def sample_region():
     """Return a sample price region for testing."""
-    return PriceRegion.DE
+    return PriceRegionName.DE.to_region()
 
 
 @pytest.fixture

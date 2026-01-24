@@ -104,7 +104,9 @@ class PricePredictor:
         entsoedata = await self.entsoestore.get_data(start, end)
         auxdata = await self.auxstore.get_data(start, end)
 
-        df = pd.concat([weather, auxdata, entsoedata], axis=1)
+        df = pd.concat([weather, auxdata], axis=1)
+        if len(entsoedata) > 0:
+            df = pd.concat([df, entsoedata])
         df = pd.concat([df, prices], axis=1)
 
         return df

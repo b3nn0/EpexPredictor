@@ -8,12 +8,12 @@ from datetime import datetime, timedelta
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import model.pricepredictor as pred
-from model.priceregion import PriceRegion
+from model.priceregion import PriceRegion, PriceRegionName
 
 
 START: datetime = datetime.fromisoformat("2025-01-24T00:00:00Z")
 END: datetime = datetime.fromisoformat("2026-01-24T00:00:00Z")
-REGION : PriceRegion = PriceRegion.DE
+REGION : PriceRegion = PriceRegionName.NL.to_region()
 LEARN_DAYS : int = 120
 
 logging.basicConfig(

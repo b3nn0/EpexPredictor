@@ -27,6 +27,8 @@ class EntsoeDataStore(DataStore):
 
     def __init__(self, region : PriceRegion, storage_dir=None):
         super().__init__(region, storage_dir, "entsoe_v1")
+        if not self.region.use_entsoe_load_forecast:
+            self.data = self.data.drop(self.data.index)
         self.update_lock = asyncio.Lock()
         self.entsoe_api_key = os.getenv("EPEXPREDICTOR_ENTSOE_API_KEY", None)
         if self.entsoe_api_key is None or len(self.entsoe_api_key) == 0:
@@ -36,7 +38,7 @@ class EntsoeDataStore(DataStore):
 
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
-        if self.entsoe_api_key is None:
+        if self.entsoe_api_key is None or not self.region.use_entsoe_load_forecast:
             return False
         
         async with self.update_lock:
@@ -51,7 +53,7 @@ class EntsoeDataStore(DataStore):
             return updated
 
     async def refresh_range(self, rstart: datetime, rend: datetime) -> bool:
-        if self.entsoe_api_key is None:
+        if self.entsoe_api_key is None or not self.region.use_entsoe_load_forecast:
             return False
 
         logging.info(f"Fetching Entso-E data from {rstart.isoformat()} to {rend.isoformat()}")
