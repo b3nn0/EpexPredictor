@@ -13,7 +13,7 @@ from model.priceregion import PriceRegion, PriceRegionName
 
 START: datetime = datetime.fromisoformat("2025-01-24T00:00:00Z")
 END: datetime = datetime.fromisoformat("2026-01-24T00:00:00Z")
-REGION : PriceRegion = PriceRegionName.NL.to_region()
+REGION : PriceRegion = PriceRegionName.DE.to_region()
 LEARN_DAYS : int = 120
 
 logging.basicConfig(

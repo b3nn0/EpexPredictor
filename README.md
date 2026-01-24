@@ -58,10 +58,14 @@ Remarks:
 Results (1-day ahead prediction):
 | Country | MAE (ct/kWh) | RMSE (ct/kWh) |
 |---------|--------------|---------------|
-| DE | 1.61 | 2.44 |
-| AT | 1.86 | 2.83 |
-| BE | 1.75 | 2.54 |
-| NL | 1.81 | 2.74 |
+| DE  | 1.61 | 2.44 |
+| AT  | 1.86 | 2.83 |
+| BE  | 1.75 | 2.54 |
+| NL  | 1.78 | 2.64 |
+| SE1 | 1.37 | 2.48 |
+| SE2 | 1.29 | 2.44 |
+| SE3 | 2.11 | 3.10 |
+| SE4 | 2.39 | 3.35 |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh

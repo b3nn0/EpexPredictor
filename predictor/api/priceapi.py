@@ -227,9 +227,9 @@ class Prices:
             self.region_prices[region] = RegionPriceManager(region.to_region())
         return await self.region_prices[region].prices(hours, fixed_price, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
     
-    def get_price_manager(self, region):
+    def get_price_manager(self, region: PriceRegionName):
         if region not in self.region_prices:
-            self.region_prices[region] = RegionPriceManager(region)
+            self.region_prices[region] = RegionPriceManager(region.to_region())
         return self.region_prices[region]
 
 

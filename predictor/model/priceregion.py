@@ -44,10 +44,10 @@ class PriceRegionName(str, Enum):
     AT = "AT"
     BE = "BE"
     NL = "NL"
-    #SE1 = "SE1"
-    #SE2 = "SE2"
-    #SE3 = "SE3"
-    #SE4 = "SE4"
+    SE1 = "SE1"
+    SE2 = "SE2"
+    SE3 = "SE3"
+    SE4 = "SE4"
 
     def to_region(self):
         return PRICE_REGIONS[self]
@@ -90,45 +90,45 @@ PRICE_REGIONS[PriceRegionName.NL] = PriceRegion(
     use_entsoe_load_forecast=False # Seems to be low quality/reduces performance
 )
 
-#PRICE_REGIONS[PriceRegionName.SE1] = PriceRegion(
-#    country_code="SE",
-#    timezone=TZ_CENTRAL_EUROPEAN,
-#    bidding_zone_energycharts=None,
-#    bidding_zone_entsoe="SE1",
-#    latitudes=[52.69, 52.36, 50.51],
-#    longitudes=[6.11, 4.90, 5.41],
-#    use_entsoe_load_forecast=False # not available for SE
-#)
-#
-#PRICE_REGIONS[PriceRegionName.SE2] = PriceRegion(
-#    country_code="SE",
-#    timezone=TZ_CENTRAL_EUROPEAN,
-#    bidding_zone_energycharts=None,
-#    bidding_zone_entsoe="SE2",
-#    latitudes=[52.69, 52.36, 50.51],
-#    longitudes=[6.11, 4.90, 5.41],
-#    use_entsoe_load_forecast=False # not available for SE
-#)
-#
-#PRICE_REGIONS[PriceRegionName.SE3] = PriceRegion(
-#    country_code="SE",
-#    timezone=TZ_CENTRAL_EUROPEAN,
-#    bidding_zone_energycharts=None,
-#    bidding_zone_entsoe="SE3",
-#    latitudes=[52.69, 52.36, 50.51],
-#    longitudes=[6.11, 4.90, 5.41],
-#    use_entsoe_load_forecast=False # not available for SE
-#)
-#
-#PRICE_REGIONS[PriceRegionName.SE4] = PriceRegion(
-#    country_code="SE",
-#    timezone=TZ_CENTRAL_EUROPEAN,
-#    bidding_zone_energycharts="SE4",
-#    bidding_zone_entsoe="SE_4",
-#    latitudes=[52.69, 52.36, 50.51],
-#    longitudes=[6.11, 4.90, 5.41],
-#    use_entsoe_load_forecast=False # not available for SE
-#)
+PRICE_REGIONS[PriceRegionName.SE1] = PriceRegion(
+    country_code="SE",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts=None,
+    bidding_zone_entsoe="SE_1",
+    latitudes=[65.73, 66.12, 64.98],
+    longitudes=[21.50, 22.98, 20.34],
+    use_entsoe_load_forecast=False # not available for SE
+)
+
+PRICE_REGIONS[PriceRegionName.SE2] = PriceRegion(
+    country_code="SE",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts=None,
+    bidding_zone_entsoe="SE_2",
+    latitudes=[62.39, 63.01, 61.92],
+    longitudes=[17.30, 16.74, 18.14],
+    use_entsoe_load_forecast=False # not available for SE
+)
+
+PRICE_REGIONS[PriceRegionName.SE3] = PriceRegion(
+    country_code="SE",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts=None,
+    bidding_zone_entsoe="SE_3",
+    latitudes=[59.34, 60.12, 59.91],
+    longitudes=[17.81, 15.78, 16.47],
+    use_entsoe_load_forecast=False # not available for SE
+)
+
+PRICE_REGIONS[PriceRegionName.SE4] = PriceRegion(
+    country_code="SE",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts="SE4",
+    bidding_zone_entsoe="SE_4",
+    latitudes=[57.68, 56.24, 55.82],
+    longitudes=[12.60, 13.04, 14.10],
+    use_entsoe_load_forecast=False # not available for SE
+)
 
 
 
