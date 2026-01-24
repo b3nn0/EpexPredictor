@@ -106,7 +106,7 @@ class PricePredictor:
 
         df = pd.concat([weather, auxdata], axis=1)
         if len(entsoedata) > 0:
-            df = pd.concat([df, entsoedata])
+            df = pd.concat([df, entsoedata], axis=1)
         df = pd.concat([df, prices], axis=1)
 
         return df

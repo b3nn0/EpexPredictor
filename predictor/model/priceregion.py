@@ -87,7 +87,7 @@ PRICE_REGIONS[PriceRegionName.NL] = PriceRegion(
     bidding_zone_entsoe="NL",
     latitudes=[52.69, 52.36, 50.51],
     longitudes=[6.11, 4.90, 5.41],
-    use_entsoe_load_forecast=False
+    use_entsoe_load_forecast=False # Seems to be low quality/reduces performance
 )
 
 #PRICE_REGIONS[PriceRegionName.SE1] = PriceRegion(
