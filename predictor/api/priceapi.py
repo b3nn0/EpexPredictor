@@ -21,6 +21,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from predictor.model.priceregion import PriceRegion, PriceRegionName
 import predictor.model.pricepredictor as pp
 
+
+import warnings
+
+# Used internally inside the standard library by asyncio.to_thread.. annoying
+warnings.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    module="asyncio"
+)
+
+
+
 app = FastAPI(title="EPEX day-ahead prediction API", description="""
 API can be used free of charge on a fair use premise.
 There are no guarantees on availability or correctnes of the data.
