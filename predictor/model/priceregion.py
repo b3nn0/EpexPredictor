@@ -48,6 +48,8 @@ class PriceRegionName(str, Enum):
     SE2 = "SE2"
     SE3 = "SE3"
     SE4 = "SE4"
+    DK1 = "DK1"
+    DK2 = "DK2"
 
     def to_region(self):
         return PRICE_REGIONS[self]
@@ -130,6 +132,24 @@ PRICE_REGIONS[PriceRegionName.SE4] = PriceRegion(
     use_entsoe_load_forecast=False # not available for SE
 )
 
+PRICE_REGIONS[PriceRegionName.DK1] = PriceRegion(
+    country_code="DK",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts="DK1",
+    bidding_zone_entsoe="DK_1",
+    latitudes=[57.40, 56.2, 55.38],
+    longitudes=[10.24, 8.42, 9.60]
+)
+
+
+PRICE_REGIONS[PriceRegionName.DK2] = PriceRegion(
+    country_code="DK",
+    timezone=TZ_CENTRAL_EUROPEAN,
+    bidding_zone_energycharts="DK2",
+    bidding_zone_entsoe="DK_2",
+    latitudes=[55.98, 54.91, 55.12],
+    longitudes=[12.39, 11.89, 14.73]
+)
 
 
 

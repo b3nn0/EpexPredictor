@@ -13,6 +13,7 @@ Supported Countries:
 - Belgium
 - Netherlands
 - Sweden (SE1-SE4)
+- Denmark (DK1-DK2)
 - Others can be added relatively easily, if there is interest
 
 
@@ -70,6 +71,8 @@ Results (1-day ahead prediction):
 | SE_2   | 1.29         | 2.44          |
 | SE_3   | 2.11         | 3.1           |
 | SE_4   | 2.39         | 3.35          |
+| DK_1   | 1.99         | 2.92          |
+| DK_2   | 2.19         | 3.2           |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh

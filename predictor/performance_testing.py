@@ -4,6 +4,7 @@ import asyncio
 import logging
 import math
 from datetime import datetime, timedelta
+import os
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
@@ -22,6 +23,8 @@ REGIONS = [
     PriceRegionName.SE2.to_region(),
     PriceRegionName.SE3.to_region(),
     PriceRegionName.SE4.to_region(),
+    PriceRegionName.DK1.to_region(),
+    PriceRegionName.DK2.to_region(),
 ]
 
 LEARN_DAYS : int = 120
@@ -55,7 +58,8 @@ async def perform_test(region : PriceRegion):
     d3_mae = []
     d3_mse = []
 
-    predictor = pred.PricePredictor(region, ".")
+    data_dir = os.getenv("EPEXPREDICTOR_DATADIR", "./data")
+    predictor = pred.PricePredictor(region, data_dir)
     await load_data(predictor)
 
     iterations = 0
