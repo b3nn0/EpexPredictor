@@ -3,10 +3,9 @@
 import asyncio
 import logging
 import math
+import pandas as pd
 from datetime import datetime, timedelta
 import os
-
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 import model.pricepredictor as pred
 from model.priceregion import PriceRegion, PriceRegionName
@@ -50,6 +49,12 @@ async def load_data(p : pred.PricePredictor):
         p.gasstore.get_data(learn_start, END)
     )
 
+def mse(df1: pd.Series, df2: pd.Series):
+    return (df1 - df2).pow(2).mean()
+
+def mae(df1: pd.Series, df2: pd.Series):
+    return (df1 - df2).abs().mean()
+
 
 async def perform_test(region : PriceRegion):
     learn_start = START - timedelta(days=LEARN_DAYS)
@@ -88,13 +93,13 @@ async def perform_test(region : PriceRegion):
         actual = await predictor.pricestore.get_data(d0, d3)
 
 
-        d1_mae.append(mean_absolute_error(actual.loc[d0:d1]["price"], prediction.loc[d0:d1]["price"]))
-        d2_mae.append(mean_absolute_error(actual.loc[d1:d2]["price"], prediction.loc[d1:d2]["price"]))
-        d3_mae.append(mean_absolute_error(actual.loc[d2:d3]["price"], prediction.loc[d2:d3]["price"]))
+        d1_mae.append(mae(actual.loc[d0:d1]["price"], prediction.loc[d0:d1]["price"]))
+        d2_mae.append(mae(actual.loc[d1:d2]["price"], prediction.loc[d1:d2]["price"]))
+        d3_mae.append(mae(actual.loc[d2:d3]["price"], prediction.loc[d2:d3]["price"]))
 
-        d1_mse.append(mean_squared_error(actual.loc[d0:d1]["price"], prediction.loc[d0:d1]["price"]))
-        d2_mse.append(mean_squared_error(actual.loc[d1:d2]["price"], prediction.loc[d1:d2]["price"]))
-        d3_mse.append(mean_squared_error(actual.loc[d2:d3]["price"], prediction.loc[d2:d3]["price"]))
+        d1_mse.append(mse(actual.loc[d0:d1]["price"], prediction.loc[d0:d1]["price"]))
+        d2_mse.append(mse(actual.loc[d1:d2]["price"], prediction.loc[d1:d2]["price"]))
+        d3_mse.append(mse(actual.loc[d2:d3]["price"], prediction.loc[d2:d3]["price"]))
         
         learn_start += timedelta(days=1)
         learn_end += timedelta(days=1)

@@ -29,7 +29,7 @@ class PricePredictor:
 
     traindata: pd.DataFrame | None = None
 
-    predictor: lgb.LGBMRegressor | None = None
+    predictor: lgb.Booster | None = None
 
     def __init__(self, region: PriceRegion, storage_dir: str | None = None):
         self.region = region
@@ -71,15 +71,13 @@ class PricePredictor:
         params = self.traindata.drop(columns=["price"])
         output = self.traindata["price"]
 
-        self.predictor = lgb.LGBMRegressor(
-            n_estimators=100,
-            learning_rate=0.1,
-            max_depth=-1,
-            num_leaves=31,
-            force_col_wise=True,
-            verbosity=-1
-        )
-        await asyncio.to_thread(self.predictor.fit, params, output)
+        lgb_dataset = lgb.Dataset(params, label=output)
+        params_lgb = {
+            "force_col_wise": True,
+            "verbosity": -1,
+        }
+
+        self.predictor = await asyncio.to_thread(lgb.train, params=params_lgb, train_set=lgb_dataset)
 
 
 
@@ -94,7 +92,7 @@ class PricePredictor:
         params = df.drop(columns=["price"])
 
         resultdf = pd.DataFrame(index=params.index)
-        resultdf["price"] = await asyncio.to_thread(self.predictor.predict, params)
+        resultdf["price"] = self.predictor.predict(params)
 
         if fill_known:
             resultdf.update(prices_known)
@@ -140,7 +138,6 @@ class PricePredictor:
         """
             Will re-fetch everything starting from yesterday during next training
             Not sure when past data becomes "stable", so better be sure and fetch a bit more
-            TODO: might want to make this more robust to keep old weather data in case OpenMeteo is not reachable
         """
         await self.weatherstore.refresh_range(start, end)
         await self.entsoestore.refresh_range(start, end)
