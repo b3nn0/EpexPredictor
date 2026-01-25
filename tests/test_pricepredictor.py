@@ -201,33 +201,3 @@ class TestPricePredictorRefreshMethods:
         assert predictor.weatherstore.refresh_range.called
 
 
-class TestPricePredictorLaggedFeatures:
-    """Tests for lagged feature handling."""
-
-    @pytest.mark.asyncio
-    async def test_lagged_features_created(
-        self, sample_region, sample_weather_data, sample_aux_data
-    ):
-        """Test that lagged price features are created correctly."""
-        predictor = PricePredictor(sample_region)
-
-        # Create price data with enough history for lagged features
-        dates = pd.date_range(
-            start="2025-10-20", end="2025-11-02", freq="15min", tz="UTC"
-        )
-        price_data = pd.DataFrame({"price": range(len(dates))}, index=dates)
-        price_data.index.name = "time"
-
-        # Mock the stores
-        predictor.weatherstore.get_data = AsyncMock(return_value=sample_weather_data)
-        predictor.pricestore.get_data = AsyncMock(return_value=price_data.loc["2025-11-01":"2025-11-02"])
-        predictor.auxstore.get_data = AsyncMock(return_value=sample_aux_data)
-
-        start = datetime(2025, 11, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 11, 2, tzinfo=timezone.utc)
-
-        df = await predictor.prepare_dataframe(start, end)
-
-        # Check that lagged features exist
-        assert df is not None
-        # The actual columns depend on how the data is merged

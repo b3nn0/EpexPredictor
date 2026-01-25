@@ -104,14 +104,26 @@ class RegionPriceManager:
     cachedprices : Dict[datetime, float] = {}
     cachedeval : Dict[datetime, float] = {}
 
-    update_task: asyncio.Task | None = None
+    update_lock: asyncio.Lock
+
+    init_lock: asyncio.Lock
+    is_loaded: bool = False
 
     def __init__(self, region: PriceRegion):
+        self.init_lock = asyncio.Lock() # ensures only one aio worker will load persistent data on first access
+        self.update_lock = asyncio.Lock() # ensures only one aio worker will trigger model update
+
         self.predictor = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
 
-    async def load(self) -> Self:
-        await self.predictor.load_from_persistence()
+    async def ensure_loaded(self) -> Self:
+        async with self.init_lock:
+            if self.is_loaded:
+                return self
+            log.info(f"Loading persistent data for {self.predictor.region.bidding_zone_entsoe}")
+            await self.predictor.load_from_persistence()
+            self.is_loaded = True
         return self
+
 
     def _normalize_start_ts(self, start_ts: datetime | None, tz: ZoneInfo) -> datetime:
         """Normalize start_ts to the target timezone."""
@@ -171,19 +183,20 @@ class RegionPriceManager:
 
 
     async def update_in_background(self):
-        if self.update_task is None:
-            self.update_task = asyncio.create_task(self.update_data_if_needed())
-        
-        if len(self.cachedprices) == 0:
-            await self.update_task # sync refresh on first call
+        if self.update_lock.locked() and len(self.cachedprices) > 0:
+            return # don't queue up multiple updates if we already have a filled cache
+
+        update_future = self.update_data_if_needed()
+        if len(self.cachedprices) == 0: # first call, no prices yet -> wait until first update is done
+            await update_future
+        else:
+            asyncio.create_task(update_future)
 
 
     async def update_data_if_needed(self):
-        try:
+        async with self.update_lock:
             currts = datetime.now(timezone.utc)
-
             weather_age = currts - self.last_weather_update
-
             retrain = False
 
             # Update prices every 12 hours. If it's after 13:00 local, and we don't have prices for the next day yet, update every 5 minutes
@@ -200,6 +213,7 @@ class RegionPriceManager:
                 await self.predictor.refresh_forecasts(start, end)
                 self.last_weather_update = currts
                 retrain = True
+                log.info(f"Weather data updated - triggering model retrain for {self.predictor.region.bidding_zone_entsoe}")
 
             if retrain:
                 train_start = datetime.now(timezone.utc) - timedelta(days=TRAINING_DAYS)
@@ -216,24 +230,29 @@ class RegionPriceManager:
 
                 self.predictor.cleanup()
 
-        finally:
-            self.update_task = None
-
+ 
 
 
 class Prices:
-    region_prices: Dict[PriceRegionName, RegionPriceManager] = {}
+    region_prices: Dict[PriceRegionName, RegionPriceManager]
+
+    def __init__(self):
+        self.region_prices = {}
 
     async def prices(self, hours: int = -1, fixed_price: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
                     region: PriceRegionName = PriceRegionName.DE, unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
                     timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG):
         if region not in self.region_prices:
-            self.region_prices[region] = await RegionPriceManager(region.to_region()).load()
+            self.region_prices[region] = RegionPriceManager(region.to_region())
+        
+        await self.region_prices[region].ensure_loaded()
         return await self.region_prices[region].prices(hours, fixed_price, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
     
     async def get_price_manager(self, region: PriceRegionName):
         if region not in self.region_prices:
-            self.region_prices[region] = await RegionPriceManager(region.to_region()).load()
+            self.region_prices[region] = RegionPriceManager(region.to_region())
+        
+        await self.region_prices[region].ensure_loaded()
         return self.region_prices[region]
 
 
