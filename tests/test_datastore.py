@@ -178,6 +178,7 @@ class TestDataStoreSerialization:
         expected = f"{temp_storage_dir}/test_{sample_region.bidding_zone_entsoe}.json.gz"
         assert store.get_storage_file() == expected
 
+    @pytest.mark.asyncio
     async def test_serialize_and_load(self, sample_region, temp_storage_dir):
         """Test serialization and loading of data."""
         # Create store and add data
@@ -194,13 +195,14 @@ class TestDataStoreSerialization:
         assert os.path.exists(store1.get_storage_file())
 
         # Create new store and load data
-        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store2 = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
 
         # Data should be loaded
         assert len(store2.data) == len(store1.data)
         assert store2.data.index.equals(store1.data.index)
 
-    def test_serialize_without_storage_dir(self, sample_region):
+    @pytest.mark.asyncio
+    async def test_serialize_without_storage_dir(self, sample_region):
         """Test serialize does nothing without storage dir."""
         store = ConcreteDataStore(sample_region)
         dates = pd.date_range(
@@ -220,7 +222,8 @@ class TestDataStorePersistenceEdgeCases:
         store = ConcreteDataStore(sample_region, temp_storage_dir, "nonexistent")
         assert store.data.empty
 
-    def test_load_corrupted_json_file(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_corrupted_json_file(self, sample_region, temp_storage_dir):
         """Test loading from corrupted JSON file raises a ValueError."""
         import gzip
 
@@ -231,7 +234,7 @@ class TestDataStorePersistenceEdgeCases:
 
         # Loading should raise a ValueError (pandas raises this for invalid JSON)
         with pytest.raises(ValueError):
-            ConcreteDataStore(sample_region, temp_storage_dir, "test")
+            await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
 
     def test_load_empty_json_file(self, sample_region, temp_storage_dir):
         """Test loading from empty JSON object."""
@@ -245,7 +248,8 @@ class TestDataStorePersistenceEdgeCases:
         store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
         assert store.data.empty
 
-    def test_load_with_int64_index_epoch_ms(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_with_int64_index_epoch_ms(self, sample_region, temp_storage_dir):
         """Test loading data where index is saved as epoch milliseconds (Int64Index).
 
         This is the default behavior when using to_json() without special handling.
@@ -264,7 +268,7 @@ class TestDataStorePersistenceEdgeCases:
         with gzip.open(storage_path, 'wt') as f:
             json.dump(data, f)
 
-        store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
 
         # Verify data was loaded correctly
         assert not store.data.empty
@@ -272,7 +276,8 @@ class TestDataStorePersistenceEdgeCases:
         assert store.data.index.tz is not None  # Should be UTC
         assert len(store.data) == 10
 
-    def test_load_with_naive_datetime_index(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_with_naive_datetime_index(self, sample_region, temp_storage_dir):
         """Test loading legacy data where index is stored as naive ISO datetime strings.
 
         This simulates an older persisted file whose index is encoded as ISO datetimes
@@ -292,7 +297,7 @@ class TestDataStorePersistenceEdgeCases:
         with gzip.open(storage_path, 'wt') as f:
             json.dump(data, f)
 
-        store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
 
         # Verify data was loaded and localized to UTC
         assert not store.data.empty
@@ -306,7 +311,8 @@ class TestDataStorePersistenceEdgeCases:
         expected_utc.name = "time"  # load() sets the index name to "time"
         pd.testing.assert_index_equal(store.data.index, expected_utc)
 
-    def test_load_preserves_data_values(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_preserves_data_values(self, sample_region, temp_storage_dir):
         """Test that loading preserves the original data values."""
         # Create and serialize data
         store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
@@ -317,12 +323,13 @@ class TestDataStorePersistenceEdgeCases:
         await store1.serialize()
 
         # Load into new store
-        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store2 = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
 
         # Values should match
         assert store2.data["value"].tolist() == pytest.approx([1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5])
 
-    def test_load_with_nan_values(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_with_nan_values(self, sample_region, temp_storage_dir):
         """Test that loading data with NaN values drops them correctly."""
         import gzip
         import json
@@ -344,13 +351,14 @@ class TestDataStorePersistenceEdgeCases:
         with gzip.open(storage_path, 'wt') as f:
             json.dump(data, f)
 
-        store = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
 
         # NaN rows should be dropped
         assert len(store.data) == 3
         assert all(not math.isnan(v) for v in store.data["value"])
 
-    def test_load_index_has_correct_name(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_index_has_correct_name(self, sample_region, temp_storage_dir):
         """Test that loaded data has index named 'time'."""
         store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
         dates = pd.date_range(start="2025-01-01", periods=5, freq="15min", tz="UTC")
@@ -359,10 +367,11 @@ class TestDataStorePersistenceEdgeCases:
         store1._update_data(df)
         await store1.serialize()
 
-        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store2 = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
         assert store2.data.index.name == "time"
 
-    def test_load_index_is_utc(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_index_is_utc(self, sample_region, temp_storage_dir):
         """Test that loaded data has UTC timezone on index."""
         store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
         dates = pd.date_range(start="2025-01-01", periods=5, freq="15min", tz="UTC")
@@ -371,11 +380,12 @@ class TestDataStorePersistenceEdgeCases:
         store1._update_data(df)
         await store1.serialize()
 
-        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store2 = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
         assert store2.data.index.tz is not None
         assert str(store2.data.index.tz) == "UTC"
 
-    def test_load_multiple_columns(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_multiple_columns(self, sample_region, temp_storage_dir):
         """Test loading data with multiple columns."""
         store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
         dates = pd.date_range(start="2025-01-01", periods=5, freq="15min", tz="UTC")
@@ -388,13 +398,14 @@ class TestDataStorePersistenceEdgeCases:
         store1._update_data(df)
         await store1.serialize()
 
-        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store2 = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
 
         assert list(store2.data.columns) == ["value1", "value2", "value3"]
         assert store2.data["value1"].tolist() == pytest.approx([1.0, 2.0, 3.0, 4.0, 5.0])
         assert store2.data["value2"].tolist() == pytest.approx([10.0, 20.0, 30.0, 40.0, 50.0])
 
-    def test_load_large_dataset(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_load_large_dataset(self, sample_region, temp_storage_dir):
         """Test loading a larger dataset (1 year of 15-min data)."""
         store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
         # 1 year of 15-min intervals = 35040 rows
@@ -404,13 +415,14 @@ class TestDataStorePersistenceEdgeCases:
         store1._update_data(df)
         await store1.serialize()
 
-        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store2 = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
 
         assert len(store2.data) == 35040
         assert store2.data.index[0] == pd.Timestamp("2025-01-01", tz="UTC")
         assert store2.data.index[-1] == pd.Timestamp("2025-12-31 23:45:00", tz="UTC")
 
-    def test_serialize_overwrites_existing_file(self, sample_region, temp_storage_dir):
+    @pytest.mark.asyncio
+    async def test_serialize_overwrites_existing_file(self, sample_region, temp_storage_dir):
         """Test that serialize overwrites existing data file."""
         # Create first version
         store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
@@ -421,7 +433,7 @@ class TestDataStorePersistenceEdgeCases:
         await store1.serialize()
 
         # Create second version with different data
-        store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store2 = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
         dates2 = pd.date_range(start="2025-06-01", periods=3, freq="15min", tz="UTC")
         df2 = pd.DataFrame({"value": [100, 200, 300]}, index=dates2)
         df2.index.name = "time"
@@ -430,6 +442,6 @@ class TestDataStorePersistenceEdgeCases:
         await store2.serialize()
 
         # Load and verify only second version exists
-        store3 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
+        store3 = await ConcreteDataStore(sample_region, temp_storage_dir, "test").load()
         assert len(store3.data) == 3
         assert store3.data["value"].tolist() == [100, 200, 300]
