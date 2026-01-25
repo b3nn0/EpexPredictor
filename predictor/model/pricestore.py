@@ -41,13 +41,16 @@ class PriceStore(DataStore):
     @override
     def get_next_horizon_revalidation_time(self) -> datetime | None:
         # Refresh more often when the horizon is fairly small (after 13:00 local time if the following day is not yet known)
-        price_update_frequency = 12 * 60 * 60
-        last_known = self.get_last_known()
-        assert last_known is not None
-        if (last_known - datetime.now(timezone.utc)).total_seconds() <= 60 * 60 * 11:
-            price_update_frequency = 5 * 60
-        return datetime.now(timezone.utc) + timedelta(seconds=price_update_frequency) 
+        localnow = datetime.now(tz=self.region.get_timezone_info())
+        has_prices_for_tomorrow = self.data.loc[localnow.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc)]  is not None
+        if has_prices_for_tomorrow:
+            return localnow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1) # tomorrow 13:00 local
 
+        # No prices for tomorrow. If before 13:00 local, update at 13:00 local, else update in 5 minutes
+        if localnow.hour < 13:
+            return localnow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        else:
+            return localnow.astimezone(timezone.utc) + timedelta(minutes=5) # prices should be there.. check more often
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
         async with self.update_lock:
