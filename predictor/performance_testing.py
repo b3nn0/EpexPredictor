@@ -29,6 +29,8 @@ REGIONS = [
 
 LEARN_DAYS : int = 120
 
+PARALLELIZE = True
+
 logging.basicConfig(
     format='%(message)s',
     level=logging.INFO
@@ -40,11 +42,13 @@ async def load_data(p : pred.PricePredictor):
     preload data for whole time range to reduce individual http requests
     """
     learn_start = START - timedelta(days=LEARN_DAYS)
-    await p.weatherstore.get_data(learn_start, END)
-    await p.pricestore.get_data(learn_start, END)
-    await p.entsoestore.get_data(learn_start, END)
-    await p.auxstore.get_data(learn_start, END)
-    await p.gasstore.get_data(learn_start, END)
+    await asyncio.gather(
+        p.weatherstore.get_data(learn_start, END),
+        p.pricestore.get_data(learn_start, END),
+        p.entsoestore.get_data(learn_start, END),
+        p.auxstore.get_data(learn_start, END),
+        p.gasstore.get_data(learn_start, END)
+    )
 
 
 async def perform_test(region : PriceRegion):
@@ -60,7 +64,7 @@ async def perform_test(region : PriceRegion):
     d3_mse = []
 
     data_dir = os.getenv("EPEXPREDICTOR_DATADIR", "./data")
-    predictor = pred.PricePredictor(region, data_dir)
+    predictor = await pred.PricePredictor(region, data_dir).load_from_persistence()
     await load_data(predictor)
 
     iterations = 0
@@ -119,16 +123,21 @@ async def perform_test(region : PriceRegion):
 
 async def main():
     results = []
+    tasks = []
     for region in REGIONS:
-        mae, mse = await perform_test(region)
-        results.append((region, mae, mse))
-
+        tasks.append(perform_test(region))
+    
+    if PARALLELIZE:
+        results = await asyncio.gather(*tasks)
+    else:
+        for t in tasks:
+            results.append(await t)
 
     
     print("| Region | MAE (ct/kWh) | RMSE (ct/kWh) |")
     print("|--------|--------------|---------------|")
-    for res in results:
-        print(f"| {res[0].bidding_zone_entsoe.ljust(5)}  | {str(res[1]).ljust(12)} | {str(res[2]).ljust(13)} |")
+    for i, res in enumerate(results):
+        print(f"| {REGIONS[i].bidding_zone_entsoe.ljust(5)}  | {str(res[0]).ljust(12)} | {str(res[1]).ljust(13)} |")
 
 
 

@@ -1,8 +1,9 @@
 import abc
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone, timedelta
-from typing import Generator
+from typing import Generator, Self
 
 import pandas as pd
 
@@ -39,7 +40,6 @@ class DataStore:
         self.known_source_horizon = None
         self.source_horizon_revalitation_ts = None
 
-        self.load()
 
     def set_source_horizon(self, horizon: datetime, revalidation_ts: datetime|None):
         self.known_source_horizon = horizon
@@ -130,17 +130,17 @@ class DataStore:
             os.makedirs(self.storage_dir)
         return f"{self.storage_dir}/{self.storage_fn_prefix}_{self.region.bidding_zone_entsoe}.json.gz"
 
-    def serialize(self):
+    async def serialize(self):
         fn = self.get_storage_file()
         if fn is not None:
             log.info(f"storing new {self.storage_fn_prefix} data for {self.region.bidding_zone_entsoe}")
-            self.data.to_json(fn, compression='gzip')
+            await asyncio.to_thread(self.data.to_json, fn, compression='gzip')
     
-    def load(self):
+    async def load(self) -> Self:
         fn = self.get_storage_file()
         if fn is not None and os.path.exists(fn):
             log.info(f"loading persisted {self.storage_fn_prefix} data for {self.region.bidding_zone_entsoe}")
-            self.data = pd.read_json(fn, compression='gzip')
+            self.data = await asyncio.to_thread(pd.read_json, fn, compression='gzip')
 
             # Handle index type: to_json saves DatetimeIndex as epoch milliseconds,
             # which read_json loads as Int64Index. Convert back to DatetimeIndex.
@@ -158,6 +158,7 @@ class DataStore:
 
             self.data.index.set_names("time", inplace=True)
             self.data.dropna(inplace=True)
+        return self
 
 
 

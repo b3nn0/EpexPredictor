@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import asyncio
 import logging
 import math
 from datetime import datetime, timedelta, timezone
@@ -38,6 +39,16 @@ class PricePredictor:
         self.entsoestore = EntsoeDataStore(region, storage_dir)
         self.gasstore = GasPriceStore(region, storage_dir)
 
+    async def load_from_persistence(self):
+        await asyncio.gather(
+            self.weatherstore.load(),
+            self.pricestore.load(),
+            self.auxstore.load(),
+            self.entsoestore.load(),
+            self.gasstore.load()
+        )
+        return self
+
 
     def use_datastores_from(self, other: "PricePredictor"):
         assert self.region.bidding_zone_entsoe == other.region.bidding_zone_entsoe
@@ -68,7 +79,7 @@ class PricePredictor:
             force_col_wise=True,
             verbosity=-1
         )
-        self.predictor.fit(params, output)
+        await asyncio.to_thread(self.predictor.fit, params, output)
 
 
 
@@ -83,7 +94,7 @@ class PricePredictor:
         params = df.drop(columns=["price"])
 
         resultdf = pd.DataFrame(index=params.index)
-        resultdf["price"] = self.predictor.predict(params)
+        resultdf["price"] = await asyncio.to_thread(self.predictor.predict, params)
 
         if fill_known:
             resultdf.update(prices_known)
@@ -103,9 +114,11 @@ class PricePredictor:
 
 
     async def prepare_dataframe(self, start: datetime, end: datetime) -> pd.DataFrame | None:
-        weather = await self.weatherstore.get_data(start, end)
-        prices = await self.pricestore.get_data(start, end)
-        auxdata = await self.auxstore.get_data(start, end)
+        weather, prices, auxdata = await asyncio.gather(
+            self.weatherstore.get_data(start, end),
+            self.pricestore.get_data(start, end),
+            self.auxstore.get_data(start, end)
+        )
 
         df = pd.concat([weather, auxdata], axis=1)
 

@@ -20,7 +20,7 @@ async def main():
         level=logging.INFO
     )
 
-    pred = PricePredictor(REGION, ".")
+    pred = await PricePredictor(REGION, ".").load_from_persistence()
 
     learn_start = START - timedelta(days=LEARN_DAYS)
     learn_end = START

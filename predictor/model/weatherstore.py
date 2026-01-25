@@ -88,7 +88,7 @@ class WeatherStore(DataStore):
             if updated:
                 log.info(f"weather data updated for {self.region.bidding_zone_entsoe}")
                 self.data.sort_index(inplace=True)
-                self.serialize()
+                await self.serialize()
             return updated
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:

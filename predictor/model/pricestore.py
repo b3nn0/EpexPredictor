@@ -65,7 +65,7 @@ class PriceStore(DataStore):
             if updated:
                 log.info(f"price data updated for {self.region.bidding_zone_entsoe}")
                 self.data.sort_index(inplace=True)
-                self.serialize()
+                await self.serialize()
             return updated
 
 

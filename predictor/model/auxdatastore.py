@@ -44,7 +44,7 @@ class AuxDataStore(DataStore):
             if updated:
                 log.info(f"aux data updated for {self.region.bidding_zone_entsoe}")
                 self.data.sort_index(inplace=True)
-                self.serialize()
+                await self.serialize()
             return updated
     
     @override
@@ -60,7 +60,7 @@ class AuxDataStore(DataStore):
         # make it full day to be sure
         rstart = rstart.replace(hour=0, minute=0, second=0, microsecond=0)
         rend = rend.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        log.info(f"computing aux data from {rstart.isoformat()} to {rend.isoformat()}")
+        log.info(f"computing aux data for {self.region.bidding_zone_entsoe} from {rstart.isoformat()} to {rend.isoformat()}")
 
         df = pd.DataFrame(data={"time": [pd.to_datetime(rstart, utc=True), pd.to_datetime(rend, utc=True)]})
         df.set_index("time", inplace=True)

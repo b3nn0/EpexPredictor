@@ -78,7 +78,7 @@ class GasPriceStore(DataStore):
         
             if updated:
                 log.info("gas price data updated")
-                self.serialize()
+                await self.serialize()
             return updated
 
 

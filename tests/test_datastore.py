@@ -178,7 +178,7 @@ class TestDataStoreSerialization:
         expected = f"{temp_storage_dir}/test_{sample_region.bidding_zone_entsoe}.json.gz"
         assert store.get_storage_file() == expected
 
-    def test_serialize_and_load(self, sample_region, temp_storage_dir):
+    async def test_serialize_and_load(self, sample_region, temp_storage_dir):
         """Test serialization and loading of data."""
         # Create store and add data
         store1 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
@@ -188,7 +188,7 @@ class TestDataStoreSerialization:
         df = pd.DataFrame({"value": range(len(dates))}, index=dates)
         df.index.name = "time"
         store1._update_data(df)
-        store1.serialize()
+        await store1.serialize()
 
         # Verify file exists
         assert os.path.exists(store1.get_storage_file())
@@ -209,7 +209,7 @@ class TestDataStoreSerialization:
         df = pd.DataFrame({"value": range(len(dates))}, index=dates)
         df.index.name = "time"
         store._update_data(df)
-        store.serialize()  # Should not raise
+        await store.serialize()  # Should not raise
 
 
 class TestDataStorePersistenceEdgeCases:
@@ -314,7 +314,7 @@ class TestDataStorePersistenceEdgeCases:
         df = pd.DataFrame({"value": [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5]}, index=dates)
         df.index.name = "time"
         store1._update_data(df)
-        store1.serialize()
+        await store1.serialize()
 
         # Load into new store
         store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
@@ -357,7 +357,7 @@ class TestDataStorePersistenceEdgeCases:
         df = pd.DataFrame({"value": range(5)}, index=dates)
         df.index.name = "time"
         store1._update_data(df)
-        store1.serialize()
+        await store1.serialize()
 
         store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
         assert store2.data.index.name == "time"
@@ -369,7 +369,7 @@ class TestDataStorePersistenceEdgeCases:
         df = pd.DataFrame({"value": range(5)}, index=dates)
         df.index.name = "time"
         store1._update_data(df)
-        store1.serialize()
+        await store1.serialize()
 
         store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
         assert store2.data.index.tz is not None
@@ -386,7 +386,7 @@ class TestDataStorePersistenceEdgeCases:
         }, index=dates)
         df.index.name = "time"
         store1._update_data(df)
-        store1.serialize()
+        await store1.serialize()
 
         store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
 
@@ -402,7 +402,7 @@ class TestDataStorePersistenceEdgeCases:
         df = pd.DataFrame({"value": range(35040)}, index=dates)
         df.index.name = "time"
         store1._update_data(df)
-        store1.serialize()
+        await store1.serialize()
 
         store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
 
@@ -418,7 +418,7 @@ class TestDataStorePersistenceEdgeCases:
         df1 = pd.DataFrame({"value": [1, 2, 3, 4, 5]}, index=dates1)
         df1.index.name = "time"
         store1._update_data(df1)
-        store1.serialize()
+        await store1.serialize()
 
         # Create second version with different data
         store2 = ConcreteDataStore(sample_region, temp_storage_dir, "test")
@@ -427,7 +427,7 @@ class TestDataStorePersistenceEdgeCases:
         df2.index.name = "time"
         store2.data = pd.DataFrame()  # Clear loaded data
         store2._update_data(df2)
-        store2.serialize()
+        await store2.serialize()
 
         # Load and verify only second version exists
         store3 = ConcreteDataStore(sample_region, temp_storage_dir, "test")

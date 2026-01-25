@@ -11,7 +11,7 @@ matplotlib.use("agg")
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Self
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -108,6 +108,10 @@ class RegionPriceManager:
 
     def __init__(self, region: PriceRegion):
         self.predictor = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
+
+    async def load(self) -> Self:
+        await self.predictor.load_from_persistence()
+        return self
 
     def _normalize_start_ts(self, start_ts: datetime | None, tz: ZoneInfo) -> datetime:
         """Normalize start_ts to the target timezone."""
@@ -224,12 +228,12 @@ class Prices:
                     region: PriceRegionName = PriceRegionName.DE, unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
                     timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG):
         if region not in self.region_prices:
-            self.region_prices[region] = RegionPriceManager(region.to_region())
+            self.region_prices[region] = await RegionPriceManager(region.to_region()).load()
         return await self.region_prices[region].prices(hours, fixed_price, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
     
-    def get_price_manager(self, region: PriceRegionName):
+    async def get_price_manager(self, region: PriceRegionName):
         if region not in self.region_prices:
-            self.region_prices[region] = RegionPriceManager(region.to_region())
+            self.region_prices[region] = await RegionPriceManager(region.to_region()).load()
         return self.region_prices[region]
 
 
@@ -313,7 +317,7 @@ async def generate_evaluation_plot(
         raise HTTPException(status_code=400, detail="endTs must be after startTs")
 
     # reuse the same data stores for a unified cache
-    pricemanager = prices_handler.get_price_manager(region)
+    pricemanager = await prices_handler.get_price_manager(region)
     await pricemanager.update_data_if_needed()
     orig_predictor = pricemanager.predictor
     
