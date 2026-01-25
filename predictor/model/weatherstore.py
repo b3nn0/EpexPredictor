@@ -79,8 +79,7 @@ class WeatherStore(DataStore):
                     tries += 1
                     if tries > 3:
                         raise e
-                    log.warning(f"Failed to fetch weather data. Retrying in 60s Response: {data}, error: {str(e)}")
-                    await asyncio.sleep(60)
+                    log.warning(f"Failed to fetch weather data. Retrying...: error: {str(e)}")
                     continue
                 break
 
