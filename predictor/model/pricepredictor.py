@@ -13,6 +13,7 @@ from .priceregion import PriceRegion
 from .pricestore import PriceStore
 from .weatherstore import WeatherStore
 from .entsoedatastore import EntsoeDataStore
+from .gaspricestore import GasPriceStore
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class PricePredictor:
     pricestore: PriceStore
     entsoestore: EntsoeDataStore
     auxstore: AuxDataStore
+    gasstore: GasPriceStore
 
     traindata: pd.DataFrame | None = None
 
@@ -34,6 +36,7 @@ class PricePredictor:
         self.pricestore = PriceStore(region, storage_dir)
         self.auxstore = AuxDataStore(region, storage_dir)
         self.entsoestore = EntsoeDataStore(region, storage_dir)
+        self.gasstore = GasPriceStore(region, storage_dir)
 
 
     def use_datastores_from(self, other: "PricePredictor"):
@@ -42,6 +45,7 @@ class PricePredictor:
         self.pricestore = other.pricestore
         self.auxstore = other.auxstore
         self.entsoestore = other.entsoestore
+        self.gasstore = other.gasstore
 
     def is_trained(self) -> bool:
         return self.predictor is not None
@@ -101,14 +105,22 @@ class PricePredictor:
     async def prepare_dataframe(self, start: datetime, end: datetime) -> pd.DataFrame | None:
         weather = await self.weatherstore.get_data(start, end)
         prices = await self.pricestore.get_data(start, end)
-        entsoedata = await self.entsoestore.get_data(start, end)
         auxdata = await self.auxstore.get_data(start, end)
 
         df = pd.concat([weather, auxdata], axis=1)
-        if len(entsoedata) > 0:
-            df = pd.concat([df, entsoedata], axis=1)
-        df = pd.concat([df, prices], axis=1)
 
+        
+        if self.region.use_entsoe_load_forecast:
+            entsoedata = await self.entsoestore.get_data(start, end)
+            if len(entsoedata) > 0:
+                df = pd.concat([df, entsoedata], axis=1)
+
+        if self.region.use_de_nat_gas_price:
+            gasprices = await self.gasstore.get_data(start, end)
+            gasprices = gasprices.reindex(weather.index).ffill()
+            df = pd.concat([df, gasprices], axis=1)
+
+        df = pd.concat([df, prices], axis=1)
         return df
 
     async def refresh_forecasts(self, start : datetime, end: datetime):
@@ -129,6 +141,8 @@ class PricePredictor:
         self.weatherstore.drop_before(cutoff)
         self.pricestore.drop_before(cutoff)
         self.auxstore.drop_before(cutoff)
+        self.entsoestore.drop_before(cutoff)
+        self.gasstore.drop_before(cutoff)
 
 
 

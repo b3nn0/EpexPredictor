@@ -44,7 +44,10 @@ Time features:
 - Holiday/Sunday indicator (regional holidays weighted by fraction of regions, e.g. 0.5 if half the regions have the holiday)
 - Sunrise influence: how many minutes between sunrise and the current time slot
 - Sunset influence: how many minutes between sunset and the current time slot
+
+Other:
 - Entso-E load forecast (optional, but highly recommended, especially for DE and AT)
+- Natural gas day-ahead-price, forward filled (select regions only)
 
 Output:
 - Electricity price
@@ -63,8 +66,8 @@ Remarks:
 Results (1-day ahead prediction):
 | Region | MAE (ct/kWh) | RMSE (ct/kWh) |
 |--------|--------------|---------------|
-| DE_LU  | 1.61         | 2.43          |
-| AT     | 1.87         | 2.84          |
+| DE_LU  | 1.57         | 2.38          |
+| AT     | 1.8          | 2.77          |
 | BE     | 1.74         | 2.53          |
 | NL     | 1.78         | 2.64          |
 | SE_1   | 1.37         | 2.48          |

@@ -40,10 +40,11 @@ async def load_data(p : pred.PricePredictor):
     preload data for whole time range to reduce individual http requests
     """
     learn_start = START - timedelta(days=LEARN_DAYS)
-    await p.weatherstore.fetch_missing_data(learn_start, END)
-    await p.pricestore.fetch_missing_data(learn_start, END)
-    await p.entsoestore.fetch_missing_data(learn_start, END)
-    await p.auxstore.fetch_missing_data(learn_start, END)
+    await p.weatherstore.get_data(learn_start, END)
+    await p.pricestore.get_data(learn_start, END)
+    await p.entsoestore.get_data(learn_start, END)
+    await p.auxstore.get_data(learn_start, END)
+    await p.gasstore.get_data(learn_start, END)
 
 
 async def perform_test(region : PriceRegion):
@@ -74,6 +75,7 @@ async def perform_test(region : PriceRegion):
 
         # Make sure training/prediction doesn't "cheat" with data that is known during performance testing, but not for actual forecasts
         predictor.pricestore.horizon_cutoff = learn_end
+        predictor.gasstore.horizon_cutoff = learn_end
 
         await predictor.train(learn_start, learn_end - timedelta(minutes=15)) # exclusive last
         prediction = await predictor.predict(d0, d3, False)
