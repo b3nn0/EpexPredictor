@@ -45,17 +45,17 @@ class PriceStore(DataStore):
         has_prices_for_tomorrow = self.data.loc[localnow.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc)]  is not None
         if has_prices_for_tomorrow:
             nextupdate = localnow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1) # tomorrow 13:00 local
-            log.info(f"prices for tomorrow are known. Next update: {nextupdate.isoformat()}")
+            log.info(f"{self.region.bidding_zone_entsoe} prices for tomorrow are known. Next update: {nextupdate.isoformat()}")
             return nextupdate
 
         # No prices for tomorrow. If before 13:00 local, update at 13:00 local, else update in 5 minutes
         if localnow.hour < 13:
             nextupdate = localnow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-            log.info(f"local time is {localnow.isoformat()} -> next price update: {nextupdate.isoformat()}")
+            log.info(f"{self.region.bidding_zone_entsoe} local time is {localnow.isoformat()} -> next price update: {nextupdate.isoformat()}")
             return nextupdate
         else:
             nextupdate = localnow.astimezone(timezone.utc) + timedelta(minutes=5) # prices should be there.. check more often
-            log.info(f"expecting new prices soon -> next price update: {nextupdate}")
+            log.info(f"{self.region.bidding_zone_entsoe} expecting new prices soon -> next price update: {nextupdate}")
             return nextupdate
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
