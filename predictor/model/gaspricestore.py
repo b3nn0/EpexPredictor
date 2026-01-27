@@ -63,9 +63,10 @@ class GasPriceStore(DataStore):
                             pricedict = {}
 
                             for i, t in enumerate(timestamps):
-                                time = pd.to_datetime(datetime.strptime(t, "%d.%m.%Y").replace(tzinfo=timezone.utc))
                                 gasprice = prices[i]
-                                pricedict[time] = gasprice
+                                if isinstance(gasprice, float): # sometimes "null" ??
+                                    time = pd.to_datetime(datetime.strptime(t, "%d.%m.%Y").replace(tzinfo=timezone.utc))
+                                    pricedict[time] = gasprice
                             
                             df = pd.DataFrame.from_dict(pricedict, orient="index", columns=["gasprice"])
                             df = df.resample('15min').ffill()
