@@ -42,8 +42,8 @@ class PriceStore(DataStore):
     def get_next_horizon_revalidation_time(self) -> datetime | None:
         # Refresh more often when the horizon is fairly small (after 13:00 local time if the following day is not yet known)
         localnow = datetime.now(tz=self.region.get_timezone_info())
-        has_prices_for_tomorrow = self.data.loc[localnow.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc)]  is not None
-        if has_prices_for_tomorrow:
+        tomorrow = localnow.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1)
+        if tomorrow in self.data.index:
             nextupdate = localnow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1) # tomorrow 13:00 local
             log.info(f"{self.region.bidding_zone_entsoe} prices for tomorrow are known. Next update: {nextupdate.isoformat()}")
             return nextupdate
