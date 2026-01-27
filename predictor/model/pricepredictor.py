@@ -118,20 +118,20 @@ class PricePredictor:
             self.auxstore.get_data(start, end)
         )
 
-        df = pd.concat([weather, auxdata], axis=1)
+        df = pd.concat([weather, auxdata], axis=1, sort=True)
 
         
         if self.region.use_entsoe_load_forecast:
             entsoedata = await self.entsoestore.get_data(start, end)
             if len(entsoedata) > 0:
-                df = pd.concat([df, entsoedata], axis=1)
+                df = pd.concat([df, entsoedata], axis=1, sort=True)
 
         if self.region.use_de_nat_gas_price:
             gasprices = await self.gasstore.get_data(start, end)
             gasprices = gasprices.reindex(weather.index).ffill()
-            df = pd.concat([df, gasprices], axis=1)
+            df = pd.concat([df, gasprices], axis=1, sort=True)
 
-        df = pd.concat([df, prices], axis=1)
+        df = pd.concat([df, prices], axis=1, sort=True)
         return df
 
     async def refresh_forecasts(self, start : datetime, end: datetime):

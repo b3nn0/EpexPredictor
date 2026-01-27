@@ -1,13 +1,12 @@
 holidays
-pandas<=2.3.3 # current entsoe-py can't handle newer pandas properly yet..
+pandas
 matplotlib
 numpy
 aiohttp
 astral
 fastapi[standard]
 lightgbm
-# @ git+https://github.com/EnergieID/entsoe-py.git@b62938c <- doesn't seem to work properly during docker build?!
-entsoe-py
+entsoe-py>=0.7.10
 
 
 # Testing dependencies

@@ -211,7 +211,11 @@ class RegionPriceManager:
             weather_age = currts - self.last_weather_update
             retrain = False
 
-            # Update prices every 12 hours. If it's after 13:00 local, and we don't have prices for the next day yet, update every 5 minutes
+            # since we cache the prediction result, the price store is never queried and never updates until next retrain/weather update..
+            # This will ask the price store for data, and in case it things an update is worth it, it will perform one
+            await self.predictor.pricestore.get_data(self.last_known_price, datetime.now(timezone.utc) + timedelta(days=2))
+
+
             latest_price = self.predictor.pricestore.get_last_known()
             if latest_price and latest_price > self.last_known_price:
                 log.info(f"Prices were updated - triggering model retrain for {self.predictor.region.bidding_zone_entsoe}")
