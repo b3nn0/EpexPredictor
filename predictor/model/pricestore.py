@@ -6,6 +6,7 @@ import os
 from typing import override
 
 import aiohttp
+from aiohttp import ClientTimeout
 from entsoe import entsoe
 import pandas as pd
 
@@ -36,7 +37,7 @@ class PriceStore(DataStore):
         self.entsoe_api_key = os.getenv("EPEXPREDICTOR_ENTSOE_API_KEY", None)
         if self.entsoe_api_key is None or len(self.entsoe_api_key) == 0:
             self.entsoe_api_key = None
-            logging.warning("EPEXPREDICTOR_ENTSOE_API_KEY is not defined. Not all bidding zones are available.")
+            log.warning("EPEXPREDICTOR_ENTSOE_API_KEY is not defined. Not all bidding zones are available.")
 
     @override
     def get_next_horizon_revalidation_time(self) -> datetime | None:
@@ -89,7 +90,7 @@ class PriceStore(DataStore):
             return df
     
         before_str = last_known_before.isoformat() if last_known_before else "never"
-        logging.info(f"Unable to fetch prices for {self.region.bidding_zone_entsoe} - no newer prices available from any provider. Prices available until {before_str}")
+        log.info(f"Unable to fetch prices for {self.region.bidding_zone_entsoe} - no newer prices available from any provider. Prices available until {before_str}")
         return None
     
     async def fetch_prices_energycharts(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
@@ -102,7 +103,7 @@ class PriceStore(DataStore):
                 url = f"https://api.energy-charts.info/price?bzn={self.region.bidding_zone_energycharts}&start={start_formatted}&end={end_formatted}"
                 log.info(f"Fetching price data for {self.region.bidding_zone_energycharts}: {url}")
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(url, headers={"accept": "application/json"}) as resp:
+                    async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=8)) as resp:
                         txt = await resp.text()
                         if "no content available" in txt:
                             return None
@@ -122,7 +123,7 @@ class PriceStore(DataStore):
 
                         return df
         except Exception as e:
-            logging.error(f"Failed to fetch prices from energy-charts: {e}")
+            log.error(f"Failed to fetch prices from energy-charts: {e}")
 
 
     async def fetch_prices_entsoe(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
@@ -132,7 +133,7 @@ class PriceStore(DataStore):
             # Entso-E always response a bit tight...
             qstart = rstart - timedelta(days=1)
             qend = rend + timedelta(days=2)
-            logging.info(f"Fetching prices from {rstart.isoformat()} to {rend.isoformat()} from Entso-E")
+            log.info(f"Fetching prices from {rstart.isoformat()} to {rend.isoformat()} from Entso-E")
             client = entsoe.EntsoePandasClient(api_key=self.entsoe_api_key)
             prices_series = await asyncio.to_thread(client.query_day_ahead_prices, self.region.bidding_zone_entsoe, pd.to_datetime(qstart), pd.to_datetime(qend))
             prices = prices_series.to_frame("price")
@@ -141,7 +142,7 @@ class PriceStore(DataStore):
             prices = prices.resample("15min").ffill().bfill()
             return prices
         except Exception as e:
-            logging.error(f"Failed to fetch prices from entso-e: {e}")
+            log.error(f"Failed to fetch prices from entso-e: {e}")
 
 
 

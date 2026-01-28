@@ -33,7 +33,7 @@ class EntsoeDataStore(DataStore):
         self.entsoe_api_key = os.getenv("EPEXPREDICTOR_ENTSOE_API_KEY", None)
         if self.entsoe_api_key is None or len(self.entsoe_api_key) == 0:
             self.entsoe_api_key = None
-            logging.warning("EPEXPREDICTOR_ENTSOE_API_KEY is not defined. Skipping Entso-E data. Expect reduced model performance")
+            log.warning("EPEXPREDICTOR_ENTSOE_API_KEY is not defined. Skipping Entso-E data. Expect reduced model performance")
 
 
 
@@ -56,7 +56,7 @@ class EntsoeDataStore(DataStore):
         if self.entsoe_api_key is None or not self.region.use_entsoe_load_forecast:
             return False
 
-        logging.info(f"Fetching Entso-E data from {rstart.isoformat()} to {rend.isoformat()}")
+        log.info(f"Fetching Entso-E data from {rstart.isoformat()} to {rend.isoformat()}")
         client = entsoe.EntsoePandasClient(api_key=self.entsoe_api_key)
 
         # Entso-E api always seems to cut things a bit short... and it gives us a bit of buffer for interpolation
