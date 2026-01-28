@@ -21,7 +21,7 @@ Supported Countries:
 - Maybe package it directly as a Home Assistant Add-on
 
 ## The Model
-We sample multiple locations distributed across each country. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=120).
+We sample multiple locations distributed across each region. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=120).
 This serves as the main data source.
 
 Price data is provided under CC BY 4.0 by smartd.de, retrieved via [api.energy-charts.info](https://api.energy-charts.info/) and [ENTSO-E transparency platform](https://transparency.entsoe.eu/).
@@ -85,7 +85,7 @@ Some observations:
 
 
 ### Current forecast (DE)
-![image](https://epexpredictor.batzill.com/eval_plot?country=DE&transparent=false&width=1024&height=512)
+![image](https://epexpredictor.batzill.com/eval_plot?region=DE&transparent=false&width=1024&height=512)
 
 
 Feel free to generate your own plot for other time ranges or regions [here](https://epexpredictor.batzill.com/docs#/default/generate_evaluation_plot_eval_plot_get).
@@ -117,10 +117,10 @@ Personally, I provide the data as a HA "service" (now "action") using pyscript, 
 
 ### Configuration:
 ```yaml
-# Make sure you change the parameters fixedPrice and taxPercent according to your electricity plan
+# Make sure you change the parameters region, surcharge and taxPercent according to your electricity plan
 sensor:
   - platform: rest
-    resource: "https://epexpredictor.batzill.com/prices_short?fixedPrice=13.70084&taxPercent=19&unit=EUR_PER_KWH&hours=120"
+    resource: "https://epexpredictor.batzill.com/prices_short?region=DE&surcharge=13.70084&taxPercent=19&unit=EUR_PER_KWH&hours=120"
     method: GET
     unique_id: epex_price_prediction
     name: "EPEX Price Prediction"
@@ -134,7 +134,7 @@ sensor:
   # and plot it in the same diagram as the actual prediction sensor
 
   #- platform: rest
-  #  resource: "https://epexpredictor.batzill.com/prices_short?fixedPrice=13.70084&taxPercent=19&evaluation=true&unit=EUR_PER_KWH&hours=120"
+  #  resource: "https://epexpredictor.batzill.com/prices_short?region=DE&surcharge=13.70084&taxPercent=19&evaluation=true&unit=EUR_PER_KWH&hours=120"
   #  method: GET
   #  unique_id: epex_price_prediction_evaluation
   #  name: "EPEX Price Prediction Evaluation"
@@ -195,14 +195,14 @@ refresh_interval: 10
 Add the following to your evcc configuration file (`evcc.yaml`):
 
 ```yaml
-# Make sure you change the parameters fixedPrice and taxPercent according to your electricity plan
+# Make sure you change the parameters surcharge and taxPercent according to your electricity plan
 tariffs:
   currency: EUR
   grid:
     type: custom
     forecast:
       source: http
-      uri: https://epexpredictor.batzill.com/prices?country=DE&fixedPrice=13.15&taxPercent=19&unit=EUR_PER_KWH&timezone=UTC
+      uri: https://epexpredictor.batzill.com/prices?region=DE&surcharge=13.15&taxPercent=19&unit=EUR_PER_KWH&timezone=UTC
       jq: '[.prices[] | { start: .startsAt, "end": (.startsAt | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime + 900 | strftime("%Y-%m-%dT%H:%M:%SZ")), "value": .total}] | tostring'
 ```
 

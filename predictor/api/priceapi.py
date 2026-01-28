@@ -298,6 +298,7 @@ async def get_prices(
         region = country
     if fixed_price is not None:
         surcharge = fixed_price
+
     res = await prices_handler.prices(hours, surcharge, tax_percent, start_ts, region, unit, evaluation, hourly, timezone, format=OutputFormat.LONG)
     assert isinstance(res, PricesModel)
     return res
@@ -326,6 +327,7 @@ async def get_prices_short(
         region = country
     if fixed_price is not None:
         surcharge = fixed_price
+
     res = await prices_handler.prices(hours, surcharge, tax_percent, start_ts, region, unit, evaluation, hourly, timezone, format=OutputFormat.SHORT)
     assert isinstance(res, PricesModelShort)
     return res
@@ -343,7 +345,7 @@ async def get_prices_short(
 async def generate_evaluation_plot(
     start_ts: datetime | None = Query(None, description="Plot range start, at most ~1 year in the past. Default today 00:00Z", alias="startTs"),
     end_ts: datetime | None = Query(None, description="Plot range end, Default startTs + 1 week. At most 31 days after startTs and 10 days from now", alias="endTs"),
-    region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone", alias="country"),
+    region: PriceRegionName = Query(PriceRegionName.DE, description="Region/bidding zone"),
     transparent: bool = Query(False, description="Render with transparent background"),
     width: int = Query(2048, description="image width in pixels", ge=300, le=10000),
     height: int = Query(1024, description="image height in pixels", ge=300, le=10000)):
