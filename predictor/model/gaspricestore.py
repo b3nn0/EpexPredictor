@@ -75,11 +75,14 @@ class GasPriceStore(DataStore):
                             updated = True
                         except Exception as e:
                             log.warning(f"failed to update gas prices. Probably no data available for given time range - ignoring error: {e}")
+                            raise e
+                        
 
         
             if updated:
                 log.info("gas price data updated")
                 await self.serialize()
+
             return updated
 
 

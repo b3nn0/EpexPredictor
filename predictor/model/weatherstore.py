@@ -46,48 +46,42 @@ class WeatherStore(DataStore):
             url = f"https://{host}/v1/forecast?latitude={lats}&longitude={lons}&azimuth=0&tilt=0&start_date={rstart.date().isoformat()}&end_date={rend.date().isoformat()}&minutely_15=wind_speed_80m,temperature_2m,global_tilted_irradiance,pressure_msl,relative_humidity_2m&timezone=UTC"
             log.info(f"Fetching weather data for {self.region.bidding_zone_entsoe}: {url}")
 
-            tries = 0
-            while True:
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(url) as resp:
-                            data = await resp.text()
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as resp:
+                        data = await resp.text()
 
-                            data = json.loads(data)
-                            frames = []
-                            for i, fc in enumerate(data):
-                                df = pd.DataFrame()
+                        data = json.loads(data)
+                        frames = []
+                        for i, fc in enumerate(data):
+                            df = pd.DataFrame()
 
-                                df["time"] = fc["minutely_15"]["time"]
-                                df[f"wind_{i}"] = fc["minutely_15"]["wind_speed_80m"]
-                                df[f"temp_{i}"] = fc["minutely_15"]["temperature_2m"]
-                                df[f"irradiance_{i}"] = fc["minutely_15"]["global_tilted_irradiance"]
-                                df[f"pressure_{i}"] = fc["minutely_15"]["pressure_msl"]        
-                                df[f"humidity_{i}"] = fc["minutely_15"]["relative_humidity_2m"]
-                                
-                                df.set_index("time", inplace=True)
-                                df = df.dropna()
-                                frames.append(df)
-
-                            df = pd.concat(frames, axis=1).reset_index()
-                            df["time"] = pd.to_datetime(df["time"], utc=True)
+                            df["time"] = fc["minutely_15"]["time"]
+                            df[f"wind_{i}"] = fc["minutely_15"]["wind_speed_80m"]
+                            df[f"temp_{i}"] = fc["minutely_15"]["temperature_2m"]
+                            df[f"irradiance_{i}"] = fc["minutely_15"]["global_tilted_irradiance"]
+                            df[f"pressure_{i}"] = fc["minutely_15"]["pressure_msl"]        
+                            df[f"humidity_{i}"] = fc["minutely_15"]["relative_humidity_2m"]
+                            
                             df.set_index("time", inplace=True)
+                            df = df.dropna()
+                            frames.append(df)
 
-                            self._update_data(df)
-                            updated = True
-                except Exception as e:
-                    tries += 1
-                    if tries > 3:
-                        raise e
-                    log.warning(f"Failed to fetch weather data. Retrying...: error: {str(e)}")
-                    continue
-                break
+                        df = pd.concat(frames, axis=1).reset_index()
+                        df["time"] = pd.to_datetime(df["time"], utc=True)
+                        df.set_index("time", inplace=True)
 
+                        self._update_data(df)
+                        updated = True
+            except Exception as e:
+                log.warning(f"Failed to fetch weather data...: error: {str(e)}")
+                raise e
+            finally:
+                if updated:
+                    log.info(f"weather data updated for {self.region.bidding_zone_entsoe}")
+                    self.data.sort_index(inplace=True)
+                    await self.serialize()
 
-            if updated:
-                log.info(f"weather data updated for {self.region.bidding_zone_entsoe}")
-                self.data.sort_index(inplace=True)
-                await self.serialize()
             return updated
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
