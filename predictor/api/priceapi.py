@@ -68,7 +68,7 @@ async def log_requests(request: Request, call_next):
         '%s "%s %s" %d %.2fms "%s"',
         client,
         request.method,
-        request.url.path,
+        request.url,
         response.status_code,
         process_time,
         user_agent,
