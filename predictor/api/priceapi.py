@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Dict, List, Self
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -45,20 +45,44 @@ Electricity prices provided under CC-BY-4.0 by [energy-charts.info](https://api.
 """)
 
 
+##### Logging Setup
+
 logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     level=logging.INFO
 )
+log = logging.getLogger(__name__)
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = datetime.now(timezone.utc)
+
+    response = await call_next(request)
+
+    process_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000.0
+
+    client = request.client.host if request.client else "-"
+    user_agent = request.headers.get("user-agent", "-")
+
+    log.info(
+        '%s "%s %s" %d %.2fms "%s"',
+        client,
+        request.method,
+        request.url.path,
+        response.status_code,
+        process_time,
+        user_agent,
+    )
+
+    return response
 
 
 
 logging.getLogger("uvicorn.error").handlers.clear()
 logging.getLogger("uvicorn.error").handlers.extend(logging.getLogger().handlers)
-logging.getLogger("uvicorn.access").handlers.clear()
-logging.getLogger("uvicorn.access").handlers.extend(logging.getLogger().handlers)
+logging.getLogger("uvicorn.access").disabled = True # we handle this ourself in middleware above
 
-log = logging.getLogger(__name__)
+
 
 @app.get("/",  include_in_schema=False)
 def api_docs():
