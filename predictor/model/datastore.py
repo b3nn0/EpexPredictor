@@ -2,8 +2,8 @@ import abc
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, timedelta
-from typing import Generator, Self
+from datetime import datetime, timezone
+from typing import Self
 
 import pandas as pd
 
@@ -78,6 +78,9 @@ class DataStore:
             end = self.horizon_cutoff
         return self.data.loc[start:end]
     
+    def needs_horizon_revalidation(self):
+        return self.source_horizon_revalitation_ts is not None and datetime.now(timezone.utc) > self.source_horizon_revalitation_ts
+
     @abc.abstractmethod
     async def fetch_missing_data(self, start: datetime, end: datetime) -> pd.DataFrame:
         pass
@@ -87,22 +90,37 @@ class DataStore:
         pass
 
 
-    def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
-        curr = start.replace(minute=0, second=0, microsecond=0)
+    def gen_missing_date_ranges(self, start: datetime, end: datetime) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+        # Full 15-minute grid
+        needed = pd.date_range(start=pd.to_datetime(start).floor("15min"), end=pd.to_datetime(end).ceil("15min"), freq="15min")
 
-        rangestart = None
-        while curr <= end:
-            next = curr + timedelta(minutes=15)
+        # Reindex to find missing timestamps
+        missing = self.data.reindex(needed).isna().all(axis=1)
 
-            if rangestart is not None and (next in self.data.index or next > end):
-                # We have the next timeslot already OR its the last timeslot
-                yield (rangestart, curr)
-                rangestart = None
+        # Keep only missing slots
+        missing = missing[missing]
 
-            if rangestart is None and curr not in self.data.index:
-                rangestart = curr
+        if missing.empty:
+            return []
 
-            curr = next
+        # Group consecutive 15-minute gaps
+        groups = (
+            missing.index
+            .to_series()
+            .diff()
+            .ne(pd.Timedelta("15min"))
+            .cumsum()
+        )
+
+        ranges = (
+            missing.index
+            .to_series()
+            .groupby(groups)
+            .agg(["min", "max"])
+        )
+
+        return list(ranges.itertuples(index=False, name=None))
+
 
     def get_last_known(self) -> datetime|None:
         data = self.data

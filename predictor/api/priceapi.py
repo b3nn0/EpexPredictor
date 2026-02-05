@@ -232,12 +232,13 @@ class RegionPriceManager:
             weather_age = (currts - self.last_weather_update).total_seconds()
 
 
-            # since we cache the prediction result, the price store is never queried and never updates until next retrain/weather update..
-            # This will ask the price store for data, and in case it things an update is worth it, it will perform one
-            await self.predictor.pricestore.get_data(train_start, train_end)
-            await self.predictor.gasstore.get_data(train_start, train_end)
-
             retrain = False
+
+            # since we cache the prediction result, the price store is never queried and never updates until next retrain/weather update..
+            # Ensure we retrain (and re-fetch horizon) more often if needed
+            if self.predictor.pricestore.needs_horizon_revalidation() or self.predictor.gasstore.needs_horizon_revalidation():
+                retrain = True # will be fetched automatically during training
+
             if weather_age > 60 * 60 * 3:  # update forecasted input data every 3 hours
                 start = datetime.now(timezone.utc) - timedelta(days=1)
                 end = datetime.now(timezone.utc) + timedelta(days=8)
