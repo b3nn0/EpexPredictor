@@ -30,11 +30,15 @@ class DataStore:
     # when is next revalidation due?
     source_horizon_revalitation_ts: datetime|None
 
+    last_updated: datetime
+
     def __init__(self, region : PriceRegion, storage_dir: str|None = None, storage_fn_prefix: str|None = None):
         self.data = pd.DataFrame()
         self.region = region
         self.storage_dir = storage_dir
         self.storage_fn_prefix = storage_fn_prefix
+
+        self.last_updated = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         self.horizon_cutoff = None
         self.known_source_horizon = None
@@ -119,8 +123,14 @@ class DataStore:
             return
         self.data = self.data[self.data.index >= pd.to_datetime(dt, utc=True)]
 
-    def _update_data(self, df: pd.DataFrame):
+    def _update_data(self, df: pd.DataFrame) -> bool:
+        olddata = self.data
         self.data = df.combine_first(self.data).dropna() # keeps new data from df, fills it with existing data from self
+
+        changed = not olddata.round(decimals=10).equals(self.data.round(decimals=10))
+        if changed:
+            self.last_updated = datetime.now(timezone.utc)
+        return changed
 
 
     def get_storage_file(self):
@@ -158,6 +168,8 @@ class DataStore:
 
             self.data.index.set_names("time", inplace=True)
             self.data.dropna(inplace=True)
+
+            self.last_updated = datetime.fromtimestamp(os.path.getmtime(fn), tz=timezone.utc)
         return self
 
 

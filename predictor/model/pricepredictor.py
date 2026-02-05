@@ -48,7 +48,9 @@ class PricePredictor:
             self.gasstore.load()
         )
         return self
-
+    
+    def last_data_update(self) -> datetime:
+        return max(self.weatherstore.last_updated, self.pricestore.last_updated, self.entsoestore.last_updated, self.gasstore.last_updated)
 
     def use_datastores_from(self, other: "PricePredictor"):
         assert self.region.bidding_zone_entsoe == other.region.bidding_zone_entsoe

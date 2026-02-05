@@ -1,5 +1,4 @@
 import asyncio
-import bisect
 from io import BytesIO
 import logging
 import os
@@ -132,13 +131,13 @@ class PricesModel(BaseModel):
 class RegionPriceManager:
     predictor : pp.PricePredictor
 
+    last_retrain : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
     last_weather_update : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
-    last_price_update : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
+    last_known_price : datetime
 
-    last_known_price : datetime = datetime.now(timezone.utc)
 
-    cachedprices : Dict[datetime, float] = {}
-    cachedeval : Dict[datetime, float] = {}
+    cachedprices : pd.DataFrame
+    cachedeval : pd.DataFrame
 
     update_lock: asyncio.Lock
 
@@ -148,6 +147,10 @@ class RegionPriceManager:
     def __init__(self, region: PriceRegion):
         self.init_lock = asyncio.Lock() # ensures only one aio worker will load persistent data on first access
         self.update_lock = asyncio.Lock() # ensures only one aio worker will trigger model update
+
+        self.cachedprices = pd.DataFrame()
+        self.cachedeval = pd.DataFrame()
+        self.last_known_price = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         self.predictor = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
 
@@ -169,17 +172,8 @@ class RegionPriceManager:
             return start_ts.replace(tzinfo=tz)
         return start_ts.astimezone(tz)
 
-    def _compute_hourly_averages(self, prediction: Dict[datetime, float], tz: ZoneInfo) -> Dict[datetime, float]:
-        """Compute hourly averages from 15-minute interval predictions."""
-        hourly_averages: Dict[datetime, list] = {}
-        for dt in sorted(prediction.keys()):
-            hour_key = dt.astimezone(tz).replace(minute=0, second=0, microsecond=0)
-            if hour_key not in hourly_averages:
-                hourly_averages[hour_key] = []
-            hourly_averages[hour_key].append(prediction[dt])
-        return {hour_dt: sum(prices) / len(prices) for hour_dt, prices in hourly_averages.items() if prices}
 
-    async def prices(self, hours: int = -1, fixed_price: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
+    async def prices(self, hours: int = -1, surcharge: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
                     unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
                     timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG) -> PricesModel | PricesModelShort:
 
@@ -194,17 +188,17 @@ class RegionPriceManager:
 
         prediction = self.cachedeval if evaluation else self.cachedprices
         if hourly:
-            prediction = self._compute_hourly_averages(prediction, tz)
+            prediction = prediction.resample("1h").mean()
+        
+        prediction = prediction.loc[start_ts:end_ts]
 
         prices: list[PriceModel] = []
-        dts = sorted(prediction.keys())
-        start_index = max(0, bisect.bisect_right(dts, start_ts) - 1)
-        end_index = min(len(dts) - 1, bisect.bisect_right(dts, end_ts))
 
-        for dt in dts[start_index:end_index]:
-            total = (prediction[dt] + fixed_price) * (1 + tax_percent / 100.0)
+        for dt, row in prediction.iterrows():
+            assert isinstance(dt, pd.Timestamp)
+            total = (row["price"] + surcharge) * (1 + tax_percent / 100.0)
             total = unit.convert(total)
-            prices.append(PriceModel(starts_at=dt.astimezone(tz), total=round(total, 4)))
+            prices.append(PriceModel(starts_at=dt.to_pydatetime().astimezone(tz), total=round(total, 4)))
 
         if format == OutputFormat.SHORT:
             return self.format_short(prices)
@@ -232,38 +226,34 @@ class RegionPriceManager:
     async def update_data_if_needed(self):
         async with self.update_lock:
             currts = datetime.now(timezone.utc)
-            weather_age = currts - self.last_weather_update
-            retrain = False
+            train_start = currts - timedelta(days=TRAINING_DAYS)
+            train_end = datetime.now(timezone.utc) + timedelta(days=7) # will ensure all weather data is fetched immediately, not partially for training and then partially for prediction
+
+            weather_age = (currts - self.last_weather_update).total_seconds()
+
 
             # since we cache the prediction result, the price store is never queried and never updates until next retrain/weather update..
             # This will ask the price store for data, and in case it things an update is worth it, it will perform one
-            await self.predictor.pricestore.get_data(self.last_known_price, datetime.now(timezone.utc) + timedelta(days=2))
+            await self.predictor.pricestore.get_data(train_start, train_end)
+            await self.predictor.gasstore.get_data(train_start, train_end)
 
-
-            latest_price = self.predictor.pricestore.get_last_known()
-            if latest_price and latest_price > self.last_known_price:
-                log.info(f"Prices were updated - triggering model retrain for {self.predictor.region.bidding_zone_entsoe}")
-                self.last_known_price = latest_price
-                retrain = True
-
-
-            if weather_age.total_seconds() > 60 * 60 * 3:  # update weather every 3 hours
+            retrain = False
+            if weather_age > 60 * 60 * 3:  # update forecasted input data every 3 hours
                 start = datetime.now(timezone.utc) - timedelta(days=1)
                 end = datetime.now(timezone.utc) + timedelta(days=8)
                 await self.predictor.refresh_forecasts(start, end)
                 self.last_weather_update = currts
                 retrain = True
-                log.info(f"Weather data updated - triggering model retrain for {self.predictor.region.bidding_zone_entsoe}")
 
-            if retrain:
-                train_start = datetime.now(timezone.utc) - timedelta(days=TRAINING_DAYS)
-                train_end = datetime.now(timezone.utc) + timedelta(days=7) # will ensure all weather data is fetched immediately, not partially for training and then partially for prediction
-                
-               
+
+            if self.predictor.last_data_update() > self.last_retrain or retrain:
+                log.info(f"{self.predictor.region.bidding_zone_entsoe}: data has been updated - triggering model retrain")
+                self.last_retrain = datetime.now(timezone.utc)
+
                 await self.predictor.train(train_start, train_end)
                 newprices, neweval = await self.predictor.predict(train_start, train_end), await self.predictor.predict(train_start, train_end, fill_known=False)
-                self.cachedprices = self.predictor.to_price_dict(newprices)
-                self.cachedeval = self.predictor.to_price_dict(neweval)
+                self.cachedprices = newprices
+                self.cachedeval = neweval
                 lastknown = self.predictor.pricestore.get_last_known()
                 if lastknown is not None:
                     self.last_known_price = lastknown
@@ -279,14 +269,14 @@ class Prices:
     def __init__(self):
         self.region_prices = {}
 
-    async def prices(self, hours: int = -1, fixed_price: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
+    async def prices(self, hours: int = -1, surcharge: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
                     region: PriceRegionName = PriceRegionName.DE, unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
                     timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG):
         if region not in self.region_prices:
             self.region_prices[region] = RegionPriceManager(region.to_region())
         
         await self.region_prices[region].ensure_loaded()
-        return await self.region_prices[region].prices(hours, fixed_price, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
+        return await self.region_prices[region].prices(hours, surcharge, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
     
     async def get_price_manager(self, region: PriceRegionName):
         if region not in self.region_prices:

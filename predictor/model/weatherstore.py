@@ -30,7 +30,7 @@ class WeatherStore(DataStore):
 
     @override
     def get_next_horizon_revalidation_time(self) -> datetime | None:
-        return datetime.now(timezone.utc) + timedelta(hours=6)
+        return self.last_updated + timedelta(hours=6)
 
     async def refresh_range(self, rstart: datetime, rend: datetime) -> bool:
         async with self.update_lock:
@@ -71,8 +71,7 @@ class WeatherStore(DataStore):
                         df["time"] = pd.to_datetime(df["time"], utc=True)
                         df.set_index("time", inplace=True)
 
-                        self._update_data(df)
-                        updated = True
+                        updated = self._update_data(df) or updated
             except Exception as e:
                 log.warning(f"Failed to fetch weather data...: error: {str(e)}")
                 raise e

@@ -93,9 +93,9 @@ class EntsoeDataStore(DataStore):
 
         hourly_df = pd.DataFrame(load_hourly)
 
+        updated = False
         if len(hourly_df) > 0:
-            self._update_data(hourly_df)
-            updated = True
+            updated = self._update_data(hourly_df)
     
         if updated:
             log.info(f"Entso-E data updated for {self.region.bidding_zone_entsoe}")
@@ -106,4 +106,4 @@ class EntsoeDataStore(DataStore):
 
 
     def get_next_horizon_revalidation_time(self) -> datetime | None:
-        return datetime.now(timezone.utc) + timedelta(hours=6)
+        return self.last_updated + timedelta(hours=3)

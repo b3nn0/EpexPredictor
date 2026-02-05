@@ -71,8 +71,7 @@ class GasPriceStore(DataStore):
                             df = pd.DataFrame.from_dict(pricedict, orient="index", columns=["gasprice"])
                             df = df.resample('15min').ffill()
 
-                            self._update_data(df)
-                            updated = True
+                            updated = self._update_data(df) or updated
                         except Exception as e:
                             log.warning(f"failed to update gas prices. Probably no data available for given time range - ignoring error: {e}")
                             raise e
@@ -88,4 +87,4 @@ class GasPriceStore(DataStore):
 
     @override
     def get_next_horizon_revalidation_time(self) -> datetime | None:
-        return datetime.now(timezone.utc) + timedelta(hours=12)
+        return self.last_updated + timedelta(hours=12)

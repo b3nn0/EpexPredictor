@@ -43,9 +43,10 @@ class PriceStore(DataStore):
     def get_next_horizon_revalidation_time(self) -> datetime | None:
         # Refresh more often when the horizon is fairly small (after 13:00 local time if the following day is not yet known)
         localnow = datetime.now(tz=self.region.get_timezone_info())
+
         tomorrow = localnow.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1)
         if tomorrow in self.data.index:
-            nextupdate = localnow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1) # tomorrow 13:00 local
+            nextupdate = tomorrow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc) # tomorrow 13:00 local
             log.info(f"{self.region.bidding_zone_entsoe} prices for tomorrow are known. Next update: {nextupdate.isoformat()}")
             return nextupdate
 
@@ -55,7 +56,7 @@ class PriceStore(DataStore):
             log.info(f"{self.region.bidding_zone_entsoe} local time is {localnow.isoformat()} -> next price update: {nextupdate.isoformat()}")
             return nextupdate
         else:
-            nextupdate = localnow.astimezone(timezone.utc) + timedelta(minutes=5) # prices should be there.. check more often
+            nextupdate = self.last_updated + timedelta(minutes=5) # prices should be there.. check more often
             log.info(f"{self.region.bidding_zone_entsoe} expecting new prices soon -> next price update: {nextupdate}")
             return nextupdate
 
@@ -69,8 +70,8 @@ class PriceStore(DataStore):
             for rstart, rend in self.gen_missing_date_ranges(start, end):
                 prices = await self.fetch_prices_best_try(rstart, rend)
                 if prices is not None:
-                    self._update_data(prices)
-                    updated = True
+                    updated = self._update_data(prices) or updated
+
         
             if updated:
                 log.info(f"price data updated for {self.region.bidding_zone_entsoe}")

@@ -1,6 +1,7 @@
 """Tests for predictor.api.priceapi module."""
 
 from datetime import datetime, timedelta, timezone
+import pandas as pd
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -252,10 +253,7 @@ class TestRegionPriceManagerPrices:
 
         # Add cached prices
         base_time = datetime(2025, 11, 1, tzinfo=timezone.utc)
-        manager.cachedprices = {
-            base_time: 10.0,
-            base_time + timedelta(minutes=15): 11.0,
-        }
+        manager.cachedprices = pd.DataFrame({"price": [10.0, 11.0]}, index=pd.to_datetime([base_time, base_time + timedelta(minutes=15)]))
         manager.last_known_price = base_time + timedelta(hours=1)
 
         # Mock update_in_background to do nothing
@@ -263,7 +261,7 @@ class TestRegionPriceManagerPrices:
 
         result = await manager.prices(
             hours=1,
-            fixed_price=5.0,
+            surcharge=5.0,
             tax_percent=0.0,
             format=OutputFormat.LONG
         )
@@ -280,16 +278,14 @@ class TestRegionPriceManagerPrices:
 
         # Add cached prices
         base_time = datetime(2025, 11, 1, tzinfo=timezone.utc)
-        manager.cachedprices = {
-            base_time: 10.0,
-        }
+        manager.cachedprices = pd.DataFrame({"price": [10.0]}, index=pd.to_datetime([base_time,]))
         manager.last_known_price = base_time + timedelta(hours=1)
 
         manager.update_in_background = AsyncMock()
 
         result = await manager.prices(
             hours=1,
-            fixed_price=0.0,
+            surcharge=0.0,
             tax_percent=19.0,
             format=OutputFormat.LONG
         )
@@ -306,19 +302,19 @@ class TestRegionPriceManagerPrices:
 
         # Add 4 prices for one hour (15-min intervals)
         base_time = datetime(2025, 11, 1, tzinfo=timezone.utc)
-        manager.cachedprices = {
-            base_time: 10.0,
-            base_time + timedelta(minutes=15): 12.0,
-            base_time + timedelta(minutes=30): 14.0,
-            base_time + timedelta(minutes=45): 16.0,
-        }
+        manager.cachedprices = pd.DataFrame({"price": [10.0, 12.0, 14.0, 16.0]}, index=pd.to_datetime([
+            base_time,
+            base_time + timedelta(minutes=15),
+            base_time + timedelta(minutes=30),
+            base_time + timedelta(minutes=45)
+        ]))
         manager.last_known_price = base_time + timedelta(hours=2)
 
         manager.update_in_background = AsyncMock()
 
         result = await manager.prices(
             hours=1,
-            fixed_price=0.0,
+            surcharge=0.0,
             tax_percent=0.0,
             hourly=True,
             format=OutputFormat.LONG
