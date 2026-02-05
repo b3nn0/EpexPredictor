@@ -192,11 +192,11 @@ class RegionPriceManager:
         
         prediction = prediction.loc[start_ts:end_ts]
 
-        prices: list[PriceModel] = []
+        prices = []
 
-        for dt, row in prediction.iterrows():
+        for dt, price in zip(prediction.index, prediction["price"]): # seems to be much faster than .iterrows()..
             assert isinstance(dt, pd.Timestamp)
-            total = (row["price"] + surcharge) * (1 + tax_percent / 100.0)
+            total = (price + surcharge) * (1 + tax_percent / 100.0)
             total = unit.convert(total)
             prices.append(PriceModel(starts_at=dt.to_pydatetime().astimezone(tz), total=round(total, 4)))
 
