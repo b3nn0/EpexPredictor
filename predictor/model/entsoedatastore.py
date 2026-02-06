@@ -106,4 +106,4 @@ class EntsoeDataStore(DataStore):
 
 
     def get_next_horizon_revalidation_time(self) -> datetime | None:
-        return self.last_updated + timedelta(hours=3)
+        return datetime.now(timezone.utc) + timedelta(hours=3)
