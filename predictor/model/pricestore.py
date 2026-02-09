@@ -56,7 +56,7 @@ class PriceStore(DataStore):
             log.info(f"{self.region.bidding_zone_entsoe}: local time is {localnow.isoformat()} -> next price update: {nextupdate.isoformat()}")
             return nextupdate
         else:
-            nextupdate = self.last_updated + timedelta(minutes=5) # prices should be there.. check more often
+            nextupdate = datetime.now(timezone.utc) + timedelta(minutes=5) # prices should be there.. check more often
             log.info(f"{self.region.bidding_zone_entsoe}: expecting new prices soon -> next price update: {nextupdate}")
             return nextupdate
 
