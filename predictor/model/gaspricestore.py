@@ -50,7 +50,7 @@ class GasPriceStore(DataStore):
                 end_formatted = qend.astimezone(tzgerman).strftime("%d.%m.%Y")
 
                 url = f"https://www.bundesnetzagentur.de/_tools/SVG/js2/_functions/json.html?view=json&id=870302&xMin={start_formatted}&xMax={end_formatted}&singleType=1"
-                log.info(f"Fetching natural gas price data for {self.region.bidding_zone_entsoe}: {url}")
+                log.info(f"{self.region.bidding_zone_entsoe}: Fetching natural gas price data: {url}")
 
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url, headers={"accept": "application/json"}) as resp:
@@ -73,13 +73,13 @@ class GasPriceStore(DataStore):
 
                             updated = self._update_data(df) or updated
                         except Exception as e:
-                            log.warning(f"failed to update gas prices. Probably no data available for given time range - ignoring error: {e}")
+                            log.warning(f"{self.region.bidding_zone_entsoe}: failed to update gas prices. Probably no data available for given time range - ignoring error: {e}")
                             raise e
                         
 
         
             if updated:
-                log.info("gas price data updated")
+                log.info(f"{self.region.bidding_zone_entsoe}: gas price data updated")
                 await self.serialize()
 
             return updated

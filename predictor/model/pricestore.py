@@ -47,17 +47,17 @@ class PriceStore(DataStore):
         tomorrow = localnow.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1)
         if tomorrow in self.data.index:
             nextupdate = tomorrow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc) # tomorrow 13:00 local
-            log.info(f"{self.region.bidding_zone_entsoe} prices for tomorrow are known. Next update: {nextupdate.isoformat()}")
+            log.info(f"{self.region.bidding_zone_entsoe}: prices for tomorrow are known. Next update: {nextupdate.isoformat()}")
             return nextupdate
 
         # No prices for tomorrow. If before 13:00 local, update at 13:00 local, else update in 5 minutes
         if localnow.hour < 13:
             nextupdate = localnow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-            log.info(f"{self.region.bidding_zone_entsoe} local time is {localnow.isoformat()} -> next price update: {nextupdate.isoformat()}")
+            log.info(f"{self.region.bidding_zone_entsoe}: local time is {localnow.isoformat()} -> next price update: {nextupdate.isoformat()}")
             return nextupdate
         else:
             nextupdate = self.last_updated + timedelta(minutes=5) # prices should be there.. check more often
-            log.info(f"{self.region.bidding_zone_entsoe} expecting new prices soon -> next price update: {nextupdate}")
+            log.info(f"{self.region.bidding_zone_entsoe}: expecting new prices soon -> next price update: {nextupdate}")
             return nextupdate
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
@@ -74,7 +74,7 @@ class PriceStore(DataStore):
 
         
             if updated:
-                log.info(f"price data updated for {self.region.bidding_zone_entsoe}")
+                log.info(f"{self.region.bidding_zone_entsoe}: price data updated")
                 self.data.sort_index(inplace=True)
                 await self.serialize()
             return updated
@@ -91,7 +91,7 @@ class PriceStore(DataStore):
             return df
     
         before_str = last_known_before.isoformat() if last_known_before else "never"
-        log.info(f"Unable to fetch prices for {self.region.bidding_zone_entsoe} - no newer prices available from any provider. Prices available until {before_str}")
+        log.info(f"{self.region.bidding_zone_entsoe}: unable to fetch prices - no newer prices available from any provider. Prices available until {before_str}")
         return None
     
     async def fetch_prices_energycharts(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
@@ -102,7 +102,7 @@ class PriceStore(DataStore):
                 start_formatted = start_of_day.isoformat().replace("+00:00", "Z")
                 end_formatted = end_of_day.isoformat().replace("+00:00", "Z")
                 url = f"https://api.energy-charts.info/price?bzn={self.region.bidding_zone_energycharts}&start={start_formatted}&end={end_formatted}"
-                log.info(f"Fetching price data for {self.region.bidding_zone_energycharts}: {url}")
+                log.info(f"{self.region.bidding_zone_energycharts}: fetching price data: {url}")
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=8)) as resp:
                         txt = await resp.text()
@@ -124,7 +124,7 @@ class PriceStore(DataStore):
 
                         return df
         except Exception as e:
-            log.error(f"Failed to fetch prices from energy-charts: {e}")
+            log.error(f"{self.region.bidding_zone_energycharts}: failed to fetch prices from energy-charts: {e}")
 
 
     async def fetch_prices_entsoe(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
@@ -134,7 +134,7 @@ class PriceStore(DataStore):
             # Entso-E always response a bit tight...
             qstart = rstart - timedelta(days=1)
             qend = rend + timedelta(days=2)
-            log.info(f"Fetching prices from {rstart.isoformat()} to {rend.isoformat()} from Entso-E")
+            log.info(f"{self.region.bidding_zone_energycharts}: fetching prices from {rstart.isoformat()} to {rend.isoformat()} from Entso-E")
             client = entsoe.EntsoePandasClient(api_key=self.entsoe_api_key)
             prices_series = await asyncio.to_thread(client.query_day_ahead_prices, self.region.bidding_zone_entsoe, pd.to_datetime(qstart), pd.to_datetime(qend))
             prices = prices_series.to_frame("price")
@@ -143,7 +143,7 @@ class PriceStore(DataStore):
             prices = prices.resample("15min").ffill().bfill()
             return prices
         except Exception as e:
-            log.error(f"Failed to fetch prices from entso-e: {e}")
+            log.error(f"{self.region.bidding_zone_energycharts}: failed to fetch prices from entso-e: {e}")
 
 
 

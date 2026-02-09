@@ -161,13 +161,13 @@ class DataStore:
     async def serialize(self):
         fn = self.get_storage_file()
         if fn is not None:
-            log.info(f"storing new {self.storage_fn_prefix} data for {self.region.bidding_zone_entsoe}")
+            log.info(f"{self.region.bidding_zone_entsoe}: storing new {self.storage_fn_prefix} data")
             await asyncio.to_thread(self.data.to_json, fn, compression='gzip')
     
     async def load(self) -> Self:
         fn = self.get_storage_file()
         if fn is not None and os.path.exists(fn):
-            log.info(f"loading persisted {self.storage_fn_prefix} data for {self.region.bidding_zone_entsoe}")
+            log.info(f"{self.region.bidding_zone_entsoe}: loading persisted {self.storage_fn_prefix} data")
             self.data = await asyncio.to_thread(pd.read_json, fn, compression='gzip')
 
             # Handle index type: to_json saves DatetimeIndex as epoch milliseconds,
@@ -180,7 +180,7 @@ class DataStore:
                 self.data.index = self.data.index.tz_localize("UTC")
             elif not isinstance(self.data.index, pd.DatetimeIndex):
                 # Unexpected index type - log warning and attempt conversion
-                log.warning(f"Unexpected index type {type(self.data.index).__name__} in persisted data, "
+                log.warning(f"{self.region.bidding_zone_entsoe}: Unexpected index type {type(self.data.index).__name__} in persisted data, "
                            f"attempting datetime conversion")
                 self.data.index = pd.to_datetime(self.data.index, utc=True)
 

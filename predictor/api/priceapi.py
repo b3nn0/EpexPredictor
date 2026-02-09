@@ -158,7 +158,7 @@ class RegionPriceManager:
         async with self.init_lock:
             if self.is_loaded:
                 return self
-            log.info(f"Loading persistent data for {self.predictor.region.bidding_zone_entsoe}")
+            log.info(f"{self.predictor.region.bidding_zone_entsoe}: Loading persistent data")
             await self.predictor.load_from_persistence()
             self.is_loaded = True
         return self

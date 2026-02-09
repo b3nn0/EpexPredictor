@@ -44,7 +44,7 @@ class WeatherStore(DataStore):
                 host = "api.open-meteo.com"
 
             url = f"https://{host}/v1/forecast?latitude={lats}&longitude={lons}&azimuth=0&tilt=0&start_date={rstart.date().isoformat()}&end_date={rend.date().isoformat()}&minutely_15=wind_speed_80m,temperature_2m,global_tilted_irradiance,pressure_msl,relative_humidity_2m&timezone=UTC"
-            log.info(f"Fetching weather data for {self.region.bidding_zone_entsoe}: {url}")
+            log.info(f"{self.region.bidding_zone_entsoe}: Fetching weather data: {url}")
 
             try:
                 async with aiohttp.ClientSession() as session:
@@ -73,11 +73,11 @@ class WeatherStore(DataStore):
 
                         updated = self._update_data(df) or updated
             except Exception as e:
-                log.warning(f"Failed to fetch weather data...: error: {str(e)}")
+                log.warning(f"{self.region.bidding_zone_entsoe}: Failed to fetch weather data: error: {str(e)}")
                 raise e
             finally:
                 if updated:
-                    log.info(f"weather data updated for {self.region.bidding_zone_entsoe}")
+                    log.info(f"{self.region.bidding_zone_entsoe}: weather data updated")
                     self.data.sort_index(inplace=True)
                     await self.serialize()
 

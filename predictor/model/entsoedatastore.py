@@ -56,7 +56,7 @@ class EntsoeDataStore(DataStore):
         if self.entsoe_api_key is None or not self.region.use_entsoe_load_forecast:
             return False
 
-        log.info(f"Fetching Entso-E data from {rstart.isoformat()} to {rend.isoformat()}")
+        log.info(f"{self.region.bidding_zone_entsoe}: Fetching Entso-E data from {rstart.isoformat()} to {rend.isoformat()}")
         client = entsoe.EntsoePandasClient(api_key=self.entsoe_api_key)
 
         # Entso-E api always seems to cut things a bit short... and it gives us a bit of buffer for interpolation
@@ -98,7 +98,7 @@ class EntsoeDataStore(DataStore):
             updated = self._update_data(hourly_df)
     
         if updated:
-            log.info(f"Entso-E data updated for {self.region.bidding_zone_entsoe}")
+            log.info(f"{self.region.bidding_zone_entsoe}: Entso-E data updated")
             self.data.sort_index(inplace=True)
             await self.serialize()
         return updated
