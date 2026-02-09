@@ -46,7 +46,7 @@ class PriceStore(DataStore):
 
         tomorrow = localnow.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1)
         if tomorrow in self.data.index:
-            nextupdate = tomorrow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc) # tomorrow 13:00 local
+            nextupdate = localnow.replace(hour=13, minute=0, second=0).astimezone(timezone.utc) + timedelta(days=1) # tomorrow 13:00 local
             log.info(f"{self.region.bidding_zone_entsoe}: prices for tomorrow are known. Next update: {nextupdate.isoformat()}")
             return nextupdate
 
