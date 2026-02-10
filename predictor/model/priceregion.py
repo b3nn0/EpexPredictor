@@ -61,6 +61,7 @@ PRICE_REGIONS[PriceRegionName.DE] = PriceRegion(
     timezone=TZ_CENTRAL_EUROPEAN,
     bidding_zone_energycharts="DE-LU",
     bidding_zone_entsoe="DE_LU",
+    use_entsoe_load_forecast=False, # Seems to be good in back testing, but worse in practice..
     latitudes=[48.4, 49.7, 51.3, 52.8, 53.8, 54.1],
     longitudes=[9.3, 11.3, 8.6, 12.0, 8.1, 11.6]
 )
