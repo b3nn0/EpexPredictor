@@ -102,7 +102,7 @@ class PriceStore(DataStore):
                 start_formatted = start_of_day.isoformat().replace("+00:00", "Z")
                 end_formatted = end_of_day.isoformat().replace("+00:00", "Z")
                 url = f"https://api.energy-charts.info/price?bzn={self.region.bidding_zone_energycharts}&start={start_formatted}&end={end_formatted}"
-                log.info(f"{self.region.bidding_zone_energycharts}: fetching price data: {url}")
+                log.info(f"{self.region.bidding_zone_entsoe}: fetching price data: {url}")
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=8)) as resp:
                         txt = await resp.text()
@@ -124,7 +124,7 @@ class PriceStore(DataStore):
 
                         return df
         except Exception as e:
-            log.error(f"{self.region.bidding_zone_energycharts}: failed to fetch prices from energy-charts: {e}")
+            log.error(f"{self.region.bidding_zone_entsoe}: failed to fetch prices from energy-charts: {e}")
 
 
     async def fetch_prices_entsoe(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
@@ -134,7 +134,7 @@ class PriceStore(DataStore):
             # Entso-E always response a bit tight...
             qstart = rstart - timedelta(days=1)
             qend = rend + timedelta(days=2)
-            log.info(f"{self.region.bidding_zone_energycharts}: fetching prices from {rstart.isoformat()} to {rend.isoformat()} from Entso-E")
+            log.info(f"{self.region.bidding_zone_entsoe}: fetching prices from {rstart.isoformat()} to {rend.isoformat()} from Entso-E")
             client = entsoe.EntsoePandasClient(api_key=self.entsoe_api_key)
             prices_series = await asyncio.to_thread(client.query_day_ahead_prices, self.region.bidding_zone_entsoe, pd.to_datetime(qstart), pd.to_datetime(qend))
             prices = prices_series.to_frame("price")
@@ -143,7 +143,7 @@ class PriceStore(DataStore):
             prices = prices.resample("15min").ffill().bfill()
             return prices
         except Exception as e:
-            log.error(f"{self.region.bidding_zone_energycharts}: failed to fetch prices from entso-e: {e}")
+            log.error(f"{self.region.bidding_zone_entsoe}: failed to fetch prices from entso-e: {e}")
 
 
 
