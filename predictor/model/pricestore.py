@@ -61,38 +61,59 @@ class PriceStore(DataStore):
             return nextupdate
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
+        """
+        Fetch missing price data from energy-charts.info or ENTSO-E.
+        
+        This method attempts to fetch price data from energy-charts.info first.
+        If energy-charts returns data but no update is necessary (i.e., _update_data returns False),
+        it will fall back to ENTSO-E to ensure we have the most recent data available.
+        
+        Args:
+            start: Start date/time for the data range
+            end: End date/time for the data range
+            
+        Returns:
+            True if new data was fetched and updated, False otherwise
+        """
         async with self.update_lock:
             start = start.astimezone(timezone.utc)
             end = end.astimezone(timezone.utc)
 
             updated = False
+            checked = False
 
             for rstart, rend in self.gen_missing_date_ranges(start, end):
-                prices = await self.fetch_prices_best_try(rstart, rend)
-                if prices is not None:
-                    updated = self._update_data(prices) or updated
+                checked = True
+                updated |= await self._fetch_and_update_from_energycharts(rstart, rend)
+                if not updated:
+                    # If energy-charts didn't update anything, try ENTSO-E as fallback
+                    updated |= await self._fetch_and_update_from_entsoe(rstart, rend)
 
         
             if updated:
                 log.info(f"{self.region.bidding_zone_entsoe}: price data updated")
                 self.data.sort_index(inplace=True)
                 await self.serialize()
+            elif checked:
+                log.info(f"{self.region.bidding_zone_entsoe}: unable to fetch prices - no newer prices available from any provider. Prices available until {self.get_last_known()}")
             return updated
 
+    async def _fetch_and_update_from_energycharts(self, rstart: datetime, rend: datetime) -> bool:
+        """Fetch price data from energy-charts and update cache if new data is available."""
+        prices = await self.fetch_prices_energycharts(rstart, rend)
+        if prices is not None and len(prices) > 0:
+            # Try to update with energy-charts data
+            return self._update_data(prices)
+        return False
 
-    async def fetch_prices_best_try(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
-        last_known_before = self.get_last_known()
-        df = await self.fetch_prices_energycharts(rstart, rend)
-        if df is not None and len(df) > 0:
-            return df
-        
-        df = await self.fetch_prices_entsoe(rstart, rend)
-        if df is not None and len(df) > 0:
-            return df
-    
-        before_str = last_known_before.isoformat() if last_known_before else "never"
-        log.info(f"{self.region.bidding_zone_entsoe}: unable to fetch prices - no newer prices available from any provider. Prices available until {before_str}")
-        return None
+    async def _fetch_and_update_from_entsoe(self, rstart: datetime, rend: datetime) -> bool:
+        """Fetch price data from ENTSO-E and update cache if new data is available."""
+        log.info(f"{self.region.bidding_zone_entsoe}: trying ENTSO-E fallback")
+        entsoe_prices = await self.fetch_prices_entsoe(rstart, rend)
+        if entsoe_prices is not None and len(entsoe_prices) > 0:
+            return self._update_data(entsoe_prices)
+        return False
+
     
     async def fetch_prices_energycharts(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
         try:
