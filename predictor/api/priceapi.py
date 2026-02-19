@@ -167,7 +167,8 @@ class RegionPriceManager:
     def _normalize_start_ts(self, start_ts: datetime | None, tz: ZoneInfo) -> datetime:
         """Normalize start_ts to the target timezone."""
         if start_ts is None:
-            return datetime.now(tz=tz)
+            now = datetime.now(tz=tz)
+            return now.replace(second=0, microsecond=0, minute=(now.minute // 15 * 15), hour=now.hour)
         if start_ts.tzinfo is None:
             return start_ts.replace(tzinfo=tz)
         return start_ts.astimezone(tz)
