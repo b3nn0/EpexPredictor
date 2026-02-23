@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Generator, override
+from typing import override
 
 import aiohttp
 import pandas as pd
@@ -95,13 +95,14 @@ class WeatherStore(DataStore):
         return updated
 
     @override
-    def gen_missing_date_ranges(self, start: datetime, end: datetime) -> Generator[tuple[datetime, datetime]]:
+    def gen_missing_date_ranges(self, start: datetime, end: datetime) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
         # a random hour of the day so we can easily check if we already have that day.
         # OpenMeteo only has full day queries anyway.
         start = start.replace(hour=12, minute=0, second=0, microsecond=0)
         end = end.replace(hour=12, minute=0, second=0, microsecond=0)
 
         curr = start
+        result = []
 
         rangestart = None
         while curr <= end:
@@ -112,13 +113,14 @@ class WeatherStore(DataStore):
 
             if rangestart is not None and (next_day in self.data.index or next_day > end or apiswitch or (curr - rangestart).total_seconds() > 60 * 60 * 24 * 90):
                 # We have the next timeslot already OR its the last timeslot OR the current range exceeds 90 days (max for openmeteo) OR we need to change APIs
-                yield (rangestart, curr)
+                result.append((pd.to_datetime(rangestart), pd.to_datetime(curr)))
                 rangestart = None
 
             if rangestart is None and curr not in self.data.index:
                 rangestart = curr
 
             curr = next_day
+        return result
 
     def needs_history_query(self, dt: datetime) -> bool:
         """

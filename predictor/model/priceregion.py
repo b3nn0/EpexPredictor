@@ -3,6 +3,7 @@ from enum import Enum
 from zoneinfo import ZoneInfo
 
 import holidays
+from holidays.holiday_base import HolidayBase
 
 # Central European Time - used by DE, AT, BE
 TZ_CENTRAL_EUROPEAN = "Europe/Berlin"
@@ -21,7 +22,7 @@ class PriceRegion:
 
     use_entsoe_load_forecast: bool = True
     use_de_nat_gas_price: bool = True
-    holidays: list[holidays.HolidayBase] = None # type:ignore # one entry for each regional holiday set, e.g. one for BW, one for BY, ...
+    holidays: list[HolidayBase] = None # type:ignore # one entry for each regional holiday set, e.g. one for BW, one for BY, ...
     
 
     def __post_init__(self):
