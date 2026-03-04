@@ -113,7 +113,10 @@ class PricePredictor:
 
 
 
-    async def prepare_dataframe(self, start: datetime, end: datetime) -> pd.DataFrame | None:
+    async def prepare_dataframe(self, actual_start: datetime, end: datetime) -> pd.DataFrame | None:
+        # gas prices are usually not available for today or the last few days. If forecast range is in the future, we might have nothing to ffill. Ensure we do
+        start = min(datetime.now(timezone.utc) - timedelta(days=14), actual_start)
+
         weather, prices, auxdata = await asyncio.gather(
             self.weatherstore.get_data(start, end),
             self.pricestore.get_data(start, end),
@@ -134,6 +137,7 @@ class PricePredictor:
             df = pd.concat([df, gasprices], axis=1, sort=True)
 
         df = pd.concat([df, prices], axis=1, sort=True)
+        df = df[actual_start:]
         return df
 
     async def refresh_forecasts(self, start : datetime, end: datetime):
