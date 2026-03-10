@@ -57,51 +57,56 @@ class EntsoeDataStore(DataStore):
             return False
 
         log.info(f"{self.region.bidding_zone_entsoe}: Fetching Entso-E data from {rstart.isoformat()} to {rend.isoformat()}")
-        client = entsoe.EntsoePandasClient(api_key=self.entsoe_api_key)
-
-        # Entso-E api always seems to cut things a bit short... and it gives us a bit of buffer for interpolation
-        qstart = rstart - timedelta(days=2)
-        qend = rend + timedelta(days=2)
-
-        # A31 = daily data, week-forecast
-        # Columns "Max Forecasted Load" and "Min Forecasted Load"
-        load_forecast = await asyncio.to_thread(client.query_load_forecast, self.region.bidding_zone_entsoe, start=pd.to_datetime(qstart), end=pd.to_datetime(qend), process_type="A31")
-        load_forecast = load_forecast.resample("15min").ffill()
-        assert isinstance(load_forecast.index, pd.DatetimeIndex)
-
-        # Max load is typically observed for morning/evening peaks, min load at night
-        def resample_load_to_hourly(row):
-            assert isinstance(row.name, pd.Timestamp)
-            maxload = row["Max Forecasted Load"]
-            minload = row["Min Forecasted Load"]
-            if row.name.hour == 11 and row.name.minute == 30:
-                return maxload
-            elif row.name.hour == 19 and row.name.minute == 0:
-                return maxload
-            elif row.name.hour == 14 and row.name.minute == 30:
-                return (3 * maxload + minload) / 4.0
-            elif row.name.hour == 3 and row.name.minute == 0:
-                return minload
-            return nan
-
-        load_hourly = load_forecast.apply(resample_load_to_hourly, axis=1)
-        load_hourly = load_hourly.interpolate(method='cubic').dropna()
-        load_hourly.name = "load"
-
-        assert isinstance(load_hourly.index, pd.DatetimeIndex)
-        load_hourly.index = load_hourly.index.tz_convert("UTC")
-
-        hourly_df = pd.DataFrame(load_hourly)
-
         updated = False
-        if len(hourly_df) > 0:
-            updated = self._update_data(hourly_df)
-    
-        if updated:
-            log.info(f"{self.region.bidding_zone_entsoe}: Entso-E data updated")
-            self.data.sort_index(inplace=True)
-            await self.serialize()
-        return updated
+
+        try:
+            client = entsoe.EntsoePandasClient(api_key=self.entsoe_api_key)
+
+            # Entso-E api always seems to cut things a bit short... and it gives us a bit of buffer for interpolation
+            qstart = rstart - timedelta(days=2)
+            qend = rend + timedelta(days=2)
+
+            # A31 = daily data, week-forecast
+            # Columns "Max Forecasted Load" and "Min Forecasted Load"
+            load_forecast = await asyncio.to_thread(client.query_load_forecast, self.region.bidding_zone_entsoe, start=pd.to_datetime(qstart), end=pd.to_datetime(qend), process_type="A31")
+            load_forecast = load_forecast.resample("15min").ffill()
+            assert isinstance(load_forecast.index, pd.DatetimeIndex)
+
+            # Max load is typically observed for morning/evening peaks, min load at night
+            def resample_load_to_hourly(row):
+                assert isinstance(row.name, pd.Timestamp)
+                maxload = row["Max Forecasted Load"]
+                minload = row["Min Forecasted Load"]
+                if row.name.hour == 11 and row.name.minute == 30:
+                    return maxload
+                elif row.name.hour == 19 and row.name.minute == 0:
+                    return maxload
+                elif row.name.hour == 14 and row.name.minute == 30:
+                    return (3 * maxload + minload) / 4.0
+                elif row.name.hour == 3 and row.name.minute == 0:
+                    return minload
+                return nan
+
+            load_hourly = load_forecast.apply(resample_load_to_hourly, axis=1)
+            load_hourly = load_hourly.interpolate(method='cubic').dropna()
+            load_hourly.name = "load"
+
+            assert isinstance(load_hourly.index, pd.DatetimeIndex)
+            load_hourly.index = load_hourly.index.tz_convert("UTC")
+
+            hourly_df = pd.DataFrame(load_hourly)
+
+            
+            if len(hourly_df) > 0:
+                updated = self._update_data(hourly_df)
+            if updated:
+                log.info(f"{self.region.bidding_zone_entsoe}: Entso-E data updated")
+                self.data.sort_index(inplace=True)
+                await self.serialize()
+            return updated
+        except Exception as e:
+            log.error(f"{self.region.bidding_zone_entsoe}: Failed to fetch Entso-E load forecast data: {e}. Forecast quality might be degraded")
+            return False
 
 
 
