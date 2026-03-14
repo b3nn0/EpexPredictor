@@ -91,8 +91,8 @@ PRICE_REGIONS[PriceRegionName.NL] = PriceRegion(
     timezone=TZ_CENTRAL_EUROPEAN,
     bidding_zone_energycharts="NL", # "NL", # Entso-e seems to update earlier
     bidding_zone_entsoe="NL",
-    latitudes=[52.69, 52.36, 50.51],
-    longitudes=[6.11, 4.90, 5.41],
+    latitudes=[52.69, 52.36, 50.51, 53.36],
+    longitudes=[6.11, 4.90, 5.41, 4.98],
     use_entsoe_load_forecast=False, # Seems to be low quality/reduces performance
     use_de_nat_gas_price = False, # doesn't seem to help
 )
