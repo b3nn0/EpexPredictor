@@ -14,16 +14,16 @@ from model.priceregion import PriceRegion, PriceRegionName
 START: datetime = datetime.fromisoformat("2025-01-24T00:00:00Z")
 END: datetime = datetime.fromisoformat("2026-01-24T00:00:00Z")
 REGIONS = [
-    PriceRegionName.DE.to_region(),
-    PriceRegionName.AT.to_region(),
-    PriceRegionName.BE.to_region(),
-    PriceRegionName.NL.to_region(),
-    PriceRegionName.SE1.to_region(),
-    PriceRegionName.SE2.to_region(),
-    PriceRegionName.SE3.to_region(),
-    PriceRegionName.SE4.to_region(),
-    PriceRegionName.DK1.to_region(),
-    PriceRegionName.DK2.to_region(),
+    PriceRegionName.DE,
+    PriceRegionName.AT,
+    PriceRegionName.BE,
+    PriceRegionName.NL,
+    PriceRegionName.SE1,
+    PriceRegionName.SE2,
+    PriceRegionName.SE3,
+    PriceRegionName.SE4,
+    PriceRegionName.DK1,
+    PriceRegionName.DK2,
 ]
 
 LEARN_DAYS : int = 120
@@ -130,7 +130,7 @@ async def main():
     results = []
     tasks = []
     for region in REGIONS:
-        tasks.append(perform_test(region))
+        tasks.append(perform_test(region.to_region()))
     
     if PARALLELIZE:
         results = await asyncio.gather(*tasks)
@@ -142,7 +142,7 @@ async def main():
     print("| Region | MAE (ct/kWh) | RMSE (ct/kWh) |")
     print("|--------|--------------|---------------|")
     for i, res in enumerate(results):
-        print(f"| {REGIONS[i].bidding_zone_entsoe.ljust(5)}  | {str(res[0]).ljust(12)} | {str(res[1]).ljust(13)} |")
+        print(f"| {REGIONS[i].ljust(5)}  | {str(res[0]).ljust(12)} | {str(res[1]).ljust(13)} |")
 
 
 
