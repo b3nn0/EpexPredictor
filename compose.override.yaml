@@ -1,0 +1,8 @@
+services:
+  epexpredictor:
+    ports:
+      - "8020:80"
+    volumes:
+      - ${DATA_PATH}:/data
+    environment:
+      - EPEXPREDICTOR_ENTSOE_API_KEY=${MY_ENTSOE_API_KEY}
