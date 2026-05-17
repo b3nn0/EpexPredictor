@@ -102,7 +102,9 @@ class PriceStore(DataStore):
         """Fetch price data from energy-charts and update cache if new data is available."""
         prices = await self.fetch_prices_energycharts(rstart, rend)
         if prices is not None and len(prices) > 0:
-            # Try to update with energy-charts data
+            if self._is_invalid_zero_data(prices):
+                log.warning(f"{self.region.bidding_zone_entsoe}: discarding zero-price data from energy-charts")
+                return False
             return self._update_data(prices)
         return False
 
@@ -111,8 +113,16 @@ class PriceStore(DataStore):
         log.info(f"{self.region.bidding_zone_entsoe}: trying ENTSO-E fallback")
         entsoe_prices = await self.fetch_prices_entsoe(rstart, rend)
         if entsoe_prices is not None and len(entsoe_prices) > 0:
+            if self._is_invalid_zero_data(entsoe_prices):
+                log.warning(f"{self.region.bidding_zone_entsoe}: discarding zero-price data from ENTSO-E")
+                return False
             return self._update_data(entsoe_prices)
         return False
+
+    def _is_invalid_zero_data(self, df: pd.DataFrame) -> bool:
+        """Check if the last 24 hours of data are all zero (invalid)."""
+        last_24h = df.tail(20 * 4)
+        return bool((last_24h["price"] == 0).all())
 
     
     async def fetch_prices_energycharts(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
