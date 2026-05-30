@@ -24,6 +24,8 @@ REGIONS = [
     PriceRegionName.SE4,
     PriceRegionName.DK1,
     PriceRegionName.DK2,
+    PriceRegionName.ES,
+    PriceRegionName.PT,
 ]
 
 LEARN_DAYS : int = 120

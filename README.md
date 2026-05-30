@@ -76,6 +76,8 @@ Results (1-day ahead prediction):
 | SE4    | 2.39         | 3.35          |
 | DK1    | 1.99         | 2.92          |
 | DK2    | 2.19         | 3.2           |
+| ES     | 1.72         | 2.35          |
+| PT     | 2.03         | 2.7           |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh
