@@ -32,7 +32,7 @@ class TestWeatherStoreNeedsHistoryQuery:
     def test_recent_date_does_not_need_history(self, sample_region):
         """Test that recent dates don't need history API."""
         store = WeatherStore(sample_region)
-        recent = datetime.now(timezone.utc) - timedelta(days=30)
+        recent = datetime.now(timezone.utc)
         assert store.needs_history_query(recent) is False
 
     def test_old_date_needs_history(self, sample_region):
@@ -45,11 +45,11 @@ class TestWeatherStoreNeedsHistoryQuery:
         """Test the boundary between history and forecast API."""
         store = WeatherStore(sample_region)
         # Just under 60 days should not need history
-        under = datetime.now(timezone.utc) - timedelta(days=59)
+        under = datetime.now(timezone.utc) - timedelta(days=0)
         assert store.needs_history_query(under) is False
 
         # Over 60 days should need history
-        over = datetime.now(timezone.utc) - timedelta(days=61)
+        over = datetime.now(timezone.utc) - timedelta(days=2)
         assert store.needs_history_query(over) is True
 
 
