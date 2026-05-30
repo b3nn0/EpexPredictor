@@ -59,25 +59,26 @@ The model uses **LightGBM gradient boosting** to predict electricity prices. Lig
 For performance testing, see `predictor/performance_testing.py`.
 
 Remarks:
-- Tests were run in early 2026, with data from 2025-01-24 to 2026-01-24. The model is tuned for 15 minute pricing. Since data before 2025-10-01 were using hourly pricing, actual performance might be slightly better
+- Tests were run in 2026, with data from 2025-05-15 to 2026-05-15. The model is tuned for 15 minute pricing. Since data before 2025-10-01 were using hourly pricing, actual performance might be slightly better
 - The model uses a 120-day rolling training window
 - Tests were done with historical weather data. If the weather forecast is wrong, performance might be slightly worse in practice
 
 Results (1-day ahead prediction):
 | Region | MAE (ct/kWh) | RMSE (ct/kWh) |
 |--------|--------------|---------------|
-| DE     | 1.57         | 2.38          |
-| AT     | 1.8          | 2.77          |
-| BE     | 1.74         | 2.53          |
-| NL     | 1.66         | 2.53          |
-| SE1    | 1.37         | 2.48          |
-| SE2    | 1.29         | 2.44          |
-| SE3    | 2.11         | 3.1           |
-| SE4    | 2.39         | 3.35          |
-| DK1    | 1.99         | 2.92          |
-| DK2    | 2.19         | 3.2           |
-| ES     | 1.72         | 2.35          |
-| PT     | 2.03         | 2.7           |
+| DE     | 1.73         | 2.72          |
+| AT     | 1.98         | 3.12          |
+| BE     | 1.83         | 2.75          |
+| NL     | 1.74         | 2.79          |
+| SE1    | 1.63         | 2.79          |
+| SE2    | 1.47         | 2.6           |
+| SE3    | 1.99         | 2.81          |
+| SE4    | 2.34         | 3.22          |
+| DK1    | 1.9          | 2.83          |
+| DK2    | 2.15         | 3.26          |
+| ES     | 1.65         | 2.25          |
+| PT     | 2.07         | 2.76          |
+
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh

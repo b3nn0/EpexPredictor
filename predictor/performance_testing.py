@@ -11,8 +11,8 @@ import model.pricepredictor as pred
 from model.priceregion import PriceRegion, PriceRegionName
 
 
-START: datetime = datetime.fromisoformat("2025-01-24T00:00:00Z")
-END: datetime = datetime.fromisoformat("2026-01-24T00:00:00Z")
+START: datetime = datetime.fromisoformat("2025-05-15T00:00:00Z")
+END: datetime = datetime.fromisoformat("2026-05-15T00:00:00Z")
 REGIONS = [
     PriceRegionName.DE,
     PriceRegionName.AT,
