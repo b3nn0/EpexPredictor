@@ -127,5 +127,5 @@ class WeatherStore(DataStore):
         If query is older than 90 days, we need OpenMeteo's historical data API.
         We switch to historical API at 60 days to be safe.
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=60)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=1, minutes=1)
         return dt < cutoff
