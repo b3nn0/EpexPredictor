@@ -128,8 +128,11 @@ class PriceStore(DataStore):
     async def fetch_prices_energycharts(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
         try:
             if self.region.bidding_zone_energycharts is not None:
-                start_of_day = rstart.replace(hour=0, minute=0, second=0, microsecond=0)
-                end_of_day = rend.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                # The market day runs on local time. Snapping to UTC midnight cuts the
+                # first hours of the day off the request for any zone east of UTC.
+                tzlocal = self.region.get_timezone_info()
+                start_of_day = rstart.astimezone(tzlocal).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+                end_of_day = (rend.astimezone(tzlocal).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).astimezone(timezone.utc)
                 start_formatted = start_of_day.isoformat().replace("+00:00", "Z")
                 end_formatted = end_of_day.isoformat().replace("+00:00", "Z")
                 url = f"https://api.energy-charts.info/price?bzn={self.region.bidding_zone_energycharts}&start={start_formatted}&end={end_formatted}"
