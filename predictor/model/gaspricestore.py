@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import override
 
@@ -14,10 +15,9 @@ log = logging.getLogger(__name__)
 
 class GasPriceStore(DataStore):
     """
-    Fetches and caches day-ahead natural gas prices from instrat.pl 
-    See https://www.bundesnetzagentur.de/DE/Gasversorgung/aktuelle_gasversorgung/_svg/Gaspreise/Gaspreise.html
-    and https://energy.instrat.pl/en/prices/gas-dam/
-    Unfortunately, BNA is not a proper API any more, so we fall back to instrat as a proxy.
+    Fetches and caches natural gas prices from bundesnetzagentur.de. Only German gas prices supported for now, but should serve as a 
+    rough indication for other markets, too.
+    https://www.bundesnetzagentur.de/DE/Gasversorgung/aktuelle_gasversorgung/_svg/Gaspreise/Gaspreise.html
     """
 
     data : pd.DataFrame
@@ -28,7 +28,7 @@ class GasPriceStore(DataStore):
     
 
     def __init__(self, region : PriceRegion, storage_dir=None):
-        super().__init__(region, storage_dir, "gasprices_v2")
+        super().__init__(region, storage_dir, "gasprices")
         self.update_lock = asyncio.Lock()
 
 
@@ -44,37 +44,55 @@ class GasPriceStore(DataStore):
             updated = False
 
             for rstart, rend in self.gen_missing_date_ranges(start, end):
-                qstart = rstart - timedelta(days=1)
-                qend = rend + timedelta(days=7) # last few days sometimes missing from result?
-                start_formatted = qstart.strftime("%d-%m-%YT%H:%M:%SZ")
-                end_formatted = qend.strftime("%d-%m-%YT%H:%M:%SZ")
 
-                url = f"https://energy-api.instrat.pl/api/prices/gas_price_rdn_daily?date_from={start_formatted}&date_to={end_formatted}&aggregation_timeframe=day&aggregation_type=avg"
-                log.info(f"{self.region.bidding_zone_entsoe}: fetching natural gas price data: {url}")
+                #tzgerman = PriceRegionName.DE.to_region().get_timezone_info()
+                #qstart = rstart - timedelta(days=5) # sometimes a few days are missing - make sure we always try to cover the requested time range
+                #qend = rend + timedelta(days=5)
+                #start_formatted = qstart.astimezone(tzgerman).strftime("%d.%m.%Y")
+                #end_formatted = qend.astimezone(tzgerman).strftime("%d.%m.%Y")
+
+                #url = f"https://www.bundesnetzagentur.de/_tools/SVG/js2/_functions/json.html?view=json&id=870302&xMin={start_formatted}&xMax={end_formatted}&singleType=1"
+                url = "https://www.bundesnetzagentur.de/DE/Gasversorgung/aktuelle_gasversorgung/_svg/Gaspreise/Gaspreise.html"
+                log.info(f"{self.region.bidding_zone_entsoe}: Fetching natural gas price data: {url}")
 
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(url, headers={"accept": "application/json"}) as resp:
+                    async with session.get(url) as resp:
                         txt = await resp.text()
                         try:
-                            data = json.loads(txt)
-                            df = pd.DataFrame.from_dict(data).drop(columns=["volume", "indeks"])
-                            df = df.set_index("date")
-                            df.index.name = "time"
-                            df.index = pd.to_datetime(df.index)
+                            # Super ugly: prices are directly embedded in the HTML as JS objects.. ugly hackery to extract the wanted data
+                            pattern = re.compile(r"data_myChartId_.*_export\s*= [\w\W]*?labels: (?P<labels>.*?\])[\w\W]*?THE Future \(M\+1\)[\w\W]*?data: (?P<data>.*?\])")
+                            for match in pattern.finditer(txt):
+                                timestamps = json.loads(match.group("labels").replace("'", "\""))
+                                prices = json.loads(match.group("data").replace(" ,", "null,"))
 
-                            df = df.rename(columns={"price": "gasprice"})
+                            # data = json.loads(txt)
+                            # timestamps = data["labels"]
+                            # prices = data["datasets"][1]["data"]
+                            pricedict = {}
 
+                            for i, t in enumerate(timestamps):
+                                gasprice = prices[i]
+                                if isinstance(gasprice, float): # sometimes "null" ??
+                                    time = pd.to_datetime(datetime.strptime(t, "%d.%m.%Y").replace(tzinfo=timezone.utc))
+                                    pricedict[time] = gasprice
+                            
+                            df = pd.DataFrame.from_dict(pricedict, orient="index", columns=["gasprice"])
                             df = df.resample('15min').ffill()
 
-                            self._update_data(df)
-                            updated = True
+                            updated = self._update_data(df) or updated
                         except Exception as e:
                             log.warning(f"{self.region.bidding_zone_entsoe}: failed to update gas prices. Probably no data available for given time range - ignoring error: {e}")
+
+                # gen_missing_date_ranges is only used to detect if there is anything missing at all. API only allows downloading all prices at once, so we break
+                # after one iteration
+                break
+                        
 
         
             if updated:
                 log.info(f"{self.region.bidding_zone_entsoe}: gas price data updated")
                 await self.serialize()
+
             return updated
 
 
