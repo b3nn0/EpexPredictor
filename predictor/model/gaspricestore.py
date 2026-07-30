@@ -8,15 +8,16 @@ import aiohttp
 import pandas as pd
 
 from .datastore import DataStore
-from .priceregion import PriceRegion, PriceRegionName
+from .priceregion import PriceRegion
 
 log = logging.getLogger(__name__)
 
 class GasPriceStore(DataStore):
     """
-    Fetches and caches natural gas prices from bundesnetzagentur.de. Only German gas prices supported for now, but should serve as a 
-    rough indication for other markets, too.
+    Fetches and caches day-ahead natural gas prices from instrat.pl 
     See https://www.bundesnetzagentur.de/DE/Gasversorgung/aktuelle_gasversorgung/_svg/Gaspreise/Gaspreise.html
+    and https://energy.instrat.pl/en/prices/gas-dam/
+    Unfortunately, BNA is not a proper API any more, so we fall back to instrat as a proxy.
     """
 
     data : pd.DataFrame
@@ -27,7 +28,7 @@ class GasPriceStore(DataStore):
     
 
     def __init__(self, region : PriceRegion, storage_dir=None):
-        super().__init__(region, storage_dir, "gasprices")
+        super().__init__(region, storage_dir, "gasprices_v2")
         self.update_lock = asyncio.Lock()
 
 
@@ -43,45 +44,37 @@ class GasPriceStore(DataStore):
             updated = False
 
             for rstart, rend in self.gen_missing_date_ranges(start, end):
-                tzgerman = PriceRegionName.DE.to_region().get_timezone_info()
-                qstart = rstart - timedelta(days=5) # sometimes a few days are missing - make sure we always try to cover the requested time range
-                qend = rend + timedelta(days=5)
-                start_formatted = qstart.astimezone(tzgerman).strftime("%d.%m.%Y")
-                end_formatted = qend.astimezone(tzgerman).strftime("%d.%m.%Y")
+                qstart = rstart - timedelta(days=1)
+                qend = rend + timedelta(days=7) # last few days sometimes missing from result?
+                start_formatted = qstart.strftime("%d-%m-%YT%H:%M:%SZ")
+                end_formatted = qend.strftime("%d-%m-%YT%H:%M:%SZ")
 
-                url = f"https://www.bundesnetzagentur.de/_tools/SVG/js2/_functions/json.html?view=json&id=870302&xMin={start_formatted}&xMax={end_formatted}&singleType=1"
-                log.info(f"{self.region.bidding_zone_entsoe}: Fetching natural gas price data: {url}")
+                url = f"https://energy-api.instrat.pl/api/prices/gas_price_rdn_daily?date_from={start_formatted}&date_to={end_formatted}&aggregation_timeframe=day&aggregation_type=avg"
+                log.info(f"{self.region.bidding_zone_entsoe}: fetching natural gas price data: {url}")
 
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url, headers={"accept": "application/json"}) as resp:
                         txt = await resp.text()
                         try:
                             data = json.loads(txt)
+                            df = pd.DataFrame.from_dict(data).drop(columns=["volume", "indeks"])
+                            df = df.set_index("date")
+                            df.index.name = "time"
+                            df.index = pd.to_datetime(df.index)
 
-                            timestamps = data["labels"]
-                            prices = data["datasets"][1]["data"]
-                            pricedict = {}
+                            df = df.rename(columns={"price": "gasprice"})
 
-                            for i, t in enumerate(timestamps):
-                                gasprice = prices[i]
-                                if isinstance(gasprice, float): # sometimes "null" ??
-                                    time = pd.to_datetime(datetime.strptime(t, "%d.%m.%Y").replace(tzinfo=timezone.utc))
-                                    pricedict[time] = gasprice
-                            
-                            df = pd.DataFrame.from_dict(pricedict, orient="index", columns=["gasprice"])
                             df = df.resample('15min').ffill()
 
-                            updated = self._update_data(df) or updated
+                            self._update_data(df)
+                            updated = True
                         except Exception as e:
                             log.warning(f"{self.region.bidding_zone_entsoe}: failed to update gas prices. Probably no data available for given time range - ignoring error: {e}")
-                            raise e
-                        
 
         
             if updated:
                 log.info(f"{self.region.bidding_zone_entsoe}: gas price data updated")
                 await self.serialize()
-
             return updated
 
 
