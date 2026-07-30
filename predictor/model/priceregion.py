@@ -21,7 +21,7 @@ class PriceRegion:
     longitudes: list[float]
 
     use_entsoe_load_forecast: bool = True
-    use_de_nat_gas_price: bool = True
+    use_de_nat_gas_price: bool = False # TODO: should be True. Temporarily disabled because BNA API changed - reenable when we have a new source
     holidays: list[HolidayBase] = None # type:ignore # one entry for each regional holiday set, e.g. one for BW, one for BY, ...
     
 
@@ -172,7 +172,6 @@ PRICE_REGIONS[PriceRegionName.ES] = PriceRegion(
     bidding_zone_entsoe="ES",
     latitudes=[36.72, 37.26, 36.84, 43.46, 41.12, 39.47],
     longitudes=[-4.42, -6.94, -2.46, -3.81, 1.25, -0.38],
-    use_de_nat_gas_price = True,
 )
 
 PRICE_REGIONS[PriceRegionName.PT] = PriceRegion(
@@ -182,7 +181,6 @@ PRICE_REGIONS[PriceRegionName.PT] = PriceRegion(
     bidding_zone_entsoe="PT",
     latitudes=[41.15, 39.74, 38.72, 37.02],
     longitudes=[-8.61, -8.81, -9.14, -7.93],
-    use_de_nat_gas_price = True,
 )
 
 
