@@ -68,11 +68,11 @@ The cross-region forecasts let the model pick up on price coupling between neigh
 For performance testing, see `predictor/performance_testing.py`. It runs a rolling backtest of the full 2-stage stack: stage-1 models for all regions, then stage-2 models using the stage-1 forecasts of all regions as cross-features (set `TWO_STAGE = False` to fall back to the original single-stage evaluation).
 
 Remarks:
-- Tests were run in 2026, with data from 2025-05-15 to 2026-05-15. The model is tuned for 15 minute pricing. Since data before 2025-10-01 were using hourly pricing, actual performance might be slightly better
-- The model uses a 120-day rolling training window
+- Tests were run in 2026, with data from 2025-09-01 to 2026-09-01. The model is tuned for 15 minute pricing.
+- The model uses a 180-day rolling training window
 - Tests were done with historical weather data. If the weather forecast is wrong, performance might be slightly worse in practice
 
-Results (1-day ahead prediction):
+Results (1/2/3-day ahead prediction):
 | Region | 1d RMSE | 1d MAE | 2d RMSE | 2d MAE | 3d RMSE | 3d MAE |
 |--------|---------|--------|---------|--------|---------|--------|
 | DE     | 2.93    | 1.73   | 3.15    | 1.88   | 3.17    | 1.91   |
