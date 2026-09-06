@@ -1,6 +1,6 @@
 *.json.gz
 data/
-
+testing/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

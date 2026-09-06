@@ -22,7 +22,10 @@ class WeatherStore(DataStore):
     storage_dir: str|None
 
     update_lock: asyncio.Lock
-    
+
+    # Shared across all WeatherStore instances: OpenMeteo dislikes concurrent
+    # requests, so we serialize every call to its API globally.
+    _openmeteo_lock: asyncio.Lock = asyncio.Lock()
 
     def __init__(self, region : PriceRegion, storage_dir: str|None =None):
         super().__init__(region, storage_dir, "weather_v2")
@@ -47,31 +50,33 @@ class WeatherStore(DataStore):
             log.info(f"{self.region.bidding_zone_entsoe}: Fetching weather data: {url}")
 
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as resp:
-                        data = await resp.text()
+                # Serialize all OpenMeteo calls globally; it dislikes concurrency.
+                async with WeatherStore._openmeteo_lock:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(url) as resp:
+                            data = await resp.text()
 
-                        data = json.loads(data)
-                        frames = []
-                        for i, fc in enumerate(data):
-                            df = pd.DataFrame()
+                            data = json.loads(data)
+                            frames = []
+                            for i, fc in enumerate(data):
+                                df = pd.DataFrame()
 
-                            df["time"] = fc["minutely_15"]["time"]
-                            df[f"wind_{i}"] = fc["minutely_15"]["wind_speed_80m"]
-                            df[f"temp_{i}"] = fc["minutely_15"]["temperature_2m"]
-                            df[f"irradiance_{i}"] = fc["minutely_15"]["global_tilted_irradiance"]
-                            df[f"pressure_{i}"] = fc["minutely_15"]["pressure_msl"]        
-                            df[f"humidity_{i}"] = fc["minutely_15"]["relative_humidity_2m"]
-                            
+                                df["time"] = fc["minutely_15"]["time"]
+                                df[f"wind_{i}"] = fc["minutely_15"]["wind_speed_80m"]
+                                df[f"temp_{i}"] = fc["minutely_15"]["temperature_2m"]
+                                df[f"irradiance_{i}"] = fc["minutely_15"]["global_tilted_irradiance"]
+                                df[f"pressure_{i}"] = fc["minutely_15"]["pressure_msl"]
+                                df[f"humidity_{i}"] = fc["minutely_15"]["relative_humidity_2m"]
+
+                                df.set_index("time", inplace=True)
+                                df = df.dropna()
+                                frames.append(df)
+
+                            df = pd.concat(frames, axis=1).reset_index()
+                            df["time"] = pd.to_datetime(df["time"], utc=True)
                             df.set_index("time", inplace=True)
-                            df = df.dropna()
-                            frames.append(df)
 
-                        df = pd.concat(frames, axis=1).reset_index()
-                        df["time"] = pd.to_datetime(df["time"], utc=True)
-                        df.set_index("time", inplace=True)
-
-                        updated = self._update_data(df) or updated
+                updated = self._update_data(df) or updated
             except Exception as e:
                 log.warning(f"{self.region.bidding_zone_entsoe}: Failed to fetch weather data: error: {str(e)}")
                 raise e

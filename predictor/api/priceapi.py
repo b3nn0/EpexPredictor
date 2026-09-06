@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from predictor.model.priceregion import PriceRegion, PriceRegionName
 import predictor.model.pricepredictor as pp
+from predictor.api.evalplotcache import EvalPlotCache
 
 
 import warnings
@@ -90,7 +91,7 @@ def api_docs():
 
 USE_PERSISTENT_TESTDATA = os.getenv("USE_PERSISTENT_TEST_DATA", "false").lower() in ("yes", "true", "t", "1")
 EPEXPREDICTOR_DATADIR = os.getenv("EPEXPREDICTOR_DATADIR")
-TRAINING_DAYS = 120
+TRAINING_DAYS = 90
 DEFAULT_TIMEZONE = "Europe/Berlin"
 
 
@@ -128,11 +129,180 @@ class PricesModel(BaseModel):
 
 
     
+# Regions that only have an ENTSO-E bidding zone need the ENTSO-E API key to fetch prices.
+# Without it, we can't train or predict them, so they are skipped gracefully.
+_HAS_ENTSOE_API_KEY = os.getenv("EPEXPREDICTOR_ENTSOE_API_KEY", None) is not None and len(os.getenv("EPEXPREDICTOR_ENTSOE_API_KEY", "")) > 0
+
+
+def is_region_available(name: PriceRegionName) -> bool:
+    region = name.to_region()
+    if region.bidding_zone_energycharts is not None:
+        return True
+    return _HAS_ENTSOE_API_KEY
+
+
+AVAILABLE_REGIONS = [name for name in PriceRegionName if is_region_available(name)]
+
+
+class BaseModelCoordinator:
+    """
+    Owns the single shared set of stage-1 (base) models for all available regions,
+    plus the shared data-fetch + base-retrain cycle.
+
+    Stage-2 models (one per requested region) are owned by their RegionPriceManager
+    and wired to these base models via cross_predictors. The base models are trained
+    first; stage-2 models are then retrained by the managers on top of the fresh
+    base forecasts.
+
+    The base update is triggered by region managers but deduplicated so a burst of
+    concurrent requests only runs one shared cycle. Base models are only retrained
+    when their underlying data actually changed.
+    """
+    base: Dict[PriceRegionName, pp.PricePredictor]
+    update_lock: asyncio.Lock
+    base_ready: bool = False
+    _update_task: asyncio.Task | None = None
+    _last_retrain: datetime
+    _last_weather_refresh: datetime
+
+    def __init__(self):
+        self.update_lock = asyncio.Lock()
+        self.base = {}
+        for name in AVAILABLE_REGIONS:
+            region = name.to_region()
+            p = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
+            self.base[name] = p
+        # Stage-2 models are wired to ALL available base models (incl. their own)
+        self.cross_predictors: list[pp.PricePredictor] = [self.base[n] for n in AVAILABLE_REGIONS]
+        self._last_retrain = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        self._last_weather_refresh = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+    async def ensure_loaded(self) -> Self:
+        async with self.update_lock:
+            if self.base_ready:
+                return self
+            log.info(f"Loading base models for {len(self.base)} regions")
+            await asyncio.gather(*(p.load_from_persistence() for p in self.base.values()))
+            self.base_ready = True
+        return self
+
+    def get_base(self, name: PriceRegionName) -> pp.PricePredictor | None:
+        return self.base.get(name)
+
+    def get_cross_predictors(self) -> list[pp.PricePredictor]:
+        return self.cross_predictors
+
+    async def update_in_background(self):
+        """Fire the shared base update if none is in flight. Non-blocking."""
+        if self._update_task is None:
+            self._update_task = asyncio.create_task(self._run_update())
+
+    async def _run_update(self):
+        try:
+            async with self.update_lock:
+                await self._do_update()
+        finally:
+            self._update_task = None
+
+    async def wait_update(self):
+        """Await the in-flight base update, if any, so callers see fresh base forecasts."""
+        if self._update_task is not None:
+            await self._update_task
+
+    async def _do_update(self):
+        currts = datetime.now(timezone.utc)
+        train_start = currts - timedelta(days=TRAINING_DAYS)
+        train_end = currts + timedelta(days=7)
+
+        # Remember freshness so we can skip the retrain when nothing changed.
+        prev = {name: p.last_data_update() for name, p in self.base.items()}
+
+        # 1) fetch fresh data for all base regions (shared stores; cheap no-op when nothing is due)
+        await asyncio.gather(*(
+            p.pricestore.get_data(currts, train_end) for p in self.base.values()
+        ))
+        await asyncio.gather(*(
+            p.gasstore.get_data(currts, train_end) for p in self.base.values()
+        ))
+
+        # 2) refresh forecasted inputs (weather + entsoe load) on a 3h cadence
+        if (currts - self._last_weather_refresh).total_seconds() > 60 * 60 * 3:
+            await asyncio.gather(*(
+                p.refresh_forecasts(currts - timedelta(days=1), currts + timedelta(days=8))
+                for p in self.base.values()
+            ))
+            self._last_weather_refresh = currts
+
+        # 3) retrain the base models that aren't trained yet, or whose data changed
+        changed = [name for name, p in self.base.items() if not p.is_trained() or p.last_data_update() > prev[name]]
+        if not changed:
+            return
+        await asyncio.gather(*(
+            self.base[name].train(train_start, train_end) for name in changed
+        ))
+        self._last_retrain = datetime.now(timezone.utc)
+        log.info(f"Base models retrained for {len(changed)}/{len(self.base)} regions")
+
+    async def train_eval_plot_data(self, name: PriceRegionName, region: PriceRegion, start_ts: datetime, end_ts: datetime) -> pd.DataFrame:
+        """
+        Train the full 2-stage model stack on the historical window [start_ts - TRAINING_DAYS, start_ts]
+        and return the merged predicted/actual DataFrame for [start_ts, end_ts] that the eval plot is rendered from.
+
+        Uses fresh stage-1 models (booster only) that share the live base models' data stores, so a
+        historical eval plot never clobbers the live base models' training window, and no separate
+        data loading/fetching is needed - train/predict fetch whatever is missing from the shared
+        stores implicitly via prepare_dataframe.
+        """
+        learn_start = start_ts - timedelta(days=TRAINING_DAYS)
+        learn_end = start_ts
+
+        # Make sure the shared stores are loaded from persistence (no-op if already done)
+        await self.ensure_loaded()
+
+        # 1) fresh stage-1 models, one per available region, sharing the live base models' stores
+        bases: list[pp.PricePredictor] = []
+        for base_name in AVAILABLE_REGIONS:
+            p = pp.PricePredictor(base_name.to_region(), storage_dir=EPEXPREDICTOR_DATADIR)
+            p.use_datastores_from(self.base[base_name])
+            bases.append(p)
+
+        # 2) stage-2 model for the requested region, wired to the fresh stage-1 models
+        eval_model = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR, cross_predictors=bases)
+        eval_model.use_datastores_from(self.base[name])
+
+        # 3) train stage 1, then stage 2 (stage 2 needs the fresh stage-1 forecasts as cross-features)
+        await asyncio.gather(*(p.train(learn_start, learn_end) for p in bases))
+        await eval_model.train(learn_start, learn_end)
+
+        # 4) merge prediction and actuals for the plot range
+        predicted = await eval_model.predict(start_ts, end_ts, fill_known=False)
+        predicted = predicted.rename(columns={"price": "predicted"})
+
+        actual = await eval_model.pricestore.get_data(start_ts, end_ts)
+        actual = actual.rename(columns={"price": "actual"})
+
+        return pd.concat([predicted, actual])
+
+
+base_models = BaseModelCoordinator()
+eval_plot_cache = EvalPlotCache(trainer=base_models.train_eval_plot_data)
+
+
 class RegionPriceManager:
+    """
+    Owns the stage-2 model for a single region (and its cached prices).
+
+    The stage-2 model is wired once at construction to the shared base (stage-1)
+    models via cross_predictors, and shares its data stores with its own base model
+    (so the shared base-fetch cycle keeps this region's data fresh for free).
+    It is retrained whenever the base models were retrained (fresh cross-features)
+    or its own data changed.
+    """
+    region: PriceRegion
+    name: PriceRegionName
     predictor : pp.PricePredictor
 
     last_retrain : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
-    last_weather_update : datetime = datetime(1980, 1, 1, tzinfo=timezone.utc)
     last_known_price : datetime
 
 
@@ -144,22 +314,28 @@ class RegionPriceManager:
     init_lock: asyncio.Lock
     is_loaded: bool = False
 
-    def __init__(self, region: PriceRegion):
+    def __init__(self, name: PriceRegionName, region: PriceRegion):
         self.init_lock = asyncio.Lock() # ensures only one aio worker will load persistent data on first access
         self.update_lock = asyncio.Lock() # ensures only one aio worker will trigger model update
 
+        self.name = name
+        self.region = region
         self.cachedprices = pd.DataFrame()
         self.cachedeval = pd.DataFrame()
         self.last_known_price = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
-        self.predictor = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR)
+        base = base_models.get_base(name)
+        assert base is not None
+        # Stage-2 model: same region, wired to all base models, sharing stores with its own base
+        self.predictor = pp.PricePredictor(region, storage_dir=EPEXPREDICTOR_DATADIR, cross_predictors=base_models.get_cross_predictors())
+        self.predictor.use_datastores_from(base)
 
     async def ensure_loaded(self) -> Self:
         async with self.init_lock:
             if self.is_loaded:
                 return self
             log.info(f"{self.predictor.region.bidding_zone_entsoe}: Loading persistent data")
-            await self.predictor.load_from_persistence()
+            await base_models.ensure_loaded()
             self.is_loaded = True
         return self
 
@@ -229,31 +405,21 @@ class RegionPriceManager:
 
     async def update_data_if_needed(self):
         async with self.update_lock:
+            # This region's data stores are shared with its base model, so the shared
+            # base cycle keeps them fresh for free. Make sure the base (stage-1) models
+            # are up to date first - the stage-2 model needs their fresh forecasts as
+            # cross-features.
+            await base_models.update_in_background()
+            await base_models.wait_update()
+
             currts = datetime.now(timezone.utc)
             train_start = currts - timedelta(days=TRAINING_DAYS)
-            train_end = datetime.now(timezone.utc) + timedelta(days=7) # will ensure all weather data is fetched immediately, not partially for training and then partially for prediction
+            train_end = currts + timedelta(days=7) # will ensure all weather data is fetched immediately, not partially for training and then partially for prediction
 
-            weather_age = (currts - self.last_weather_update).total_seconds()
-
-
-            retrain = False
-
-            # since we cache the prediction result, the price store is never queried and never updates until next retrain/weather update..
-            # Ensure we retrain (and re-fetch horizon) more often if needed
-            if self.predictor.pricestore.needs_horizon_revalidation() or self.predictor.gasstore.needs_horizon_revalidation():
-                await self.predictor.pricestore.get_data(currts, train_end)
-                await self.predictor.gasstore.get_data(currts, train_end)
-
-            if weather_age > 60 * 60 * 3:  # update forecasted input data every 3 hours
-                start = datetime.now(timezone.utc) - timedelta(days=1)
-                end = datetime.now(timezone.utc) + timedelta(days=8)
-                await self.predictor.refresh_forecasts(start, end)
-                self.last_weather_update = currts
-                retrain = True
-
-
-            if self.predictor.last_data_update() > self.last_retrain or retrain:
-                log.info(f"{self.predictor.region.bidding_zone_entsoe}: data has been updated - triggering model retrain")
+            # Retrain the stage-2 model when our own data changed, or when any base model
+            # was retrained (which means at least one of our cross-features changed).
+            if self.predictor.last_data_update() > self.last_retrain or base_models._last_retrain > self.last_retrain:
+                log.info(f"{self.predictor.region.bidding_zone_entsoe}: retraining stage-2 model")
                 self.last_retrain = datetime.now(timezone.utc)
 
                 await self.predictor.train(train_start, train_end)
@@ -278,15 +444,19 @@ class Prices:
     async def prices(self, hours: int = -1, surcharge: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
                     region: PriceRegionName = PriceRegionName.DE, unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
                     timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG):
+        if not is_region_available(region):
+            raise HTTPException(status_code=404, detail=f"Region {region} is not available (requires an ENTSO-E API key)")
         if region not in self.region_prices:
-            self.region_prices[region] = RegionPriceManager(region.to_region())
+            self.region_prices[region] = RegionPriceManager(region, region.to_region())
         
         await self.region_prices[region].ensure_loaded()
         return await self.region_prices[region].prices(hours, surcharge, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
     
     async def get_price_manager(self, region: PriceRegionName):
+        if not is_region_available(region):
+            raise HTTPException(status_code=404, detail=f"Region {region} is not available (requires an ENTSO-E API key)")
         if region not in self.region_prices:
-            self.region_prices[region] = RegionPriceManager(region.to_region())
+            self.region_prices[region] = RegionPriceManager(region, region.to_region())
         
         await self.region_prices[region].ensure_loaded()
         return self.region_prices[region]
@@ -374,6 +544,9 @@ async def generate_evaluation_plot(
     - If there is no cached weather or price data for the given time range, this request can take a while. Be patient.
     - This request is rather CPU intensive. Do not batch-call or you will be banned.
     """
+    if not is_region_available(region):
+        raise HTTPException(status_code=404, detail=f"Region {region} is not available (requires an ENTSO-E API key)")
+
     now = datetime.now(timezone.utc)
     start_ts = start_ts or now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_ts = end_ts or start_ts + timedelta(days=7)
@@ -391,25 +564,10 @@ async def generate_evaluation_plot(
     if end_ts <= start_ts:
         raise HTTPException(status_code=400, detail="endTs must be after startTs")
 
-    # reuse the same data stores for a unified cache
-    pricemanager = await prices_handler.get_price_manager(region)
-    await pricemanager.update_data_if_needed()
-    orig_predictor = pricemanager.predictor
-    
-    predictor = pp.PricePredictor(region.to_region())
-    predictor.use_datastores_from(orig_predictor)
-
-    learn_start = start_ts - timedelta(days=TRAINING_DAYS)
-    learn_end = start_ts
-    await predictor.train(learn_start, learn_end)
-
-    predicted = await predictor.predict(start_ts, end_ts, fill_known=False)
-    predicted = predicted.rename(columns={"price": "predicted"})
-
-    actual = await predictor.pricestore.get_data(start_ts, end_ts)
-    actual = actual.rename(columns={"price": "actual"})
-
-    merged = pd.concat([predicted, actual])
+    # Training the full 2-stage stack per historical window is expensive, so the trained
+    # results are cached for 30 minutes per (region, range); stale entries are served
+    # while a background refresh retrains. Rendering to PNG is cheap and per-request.
+    merged = await eval_plot_cache.get(region, start_ts, end_ts)
 
     img_data = BytesIO()
     plot = merged.plot.line(grid=True)
@@ -419,9 +577,7 @@ async def generate_evaluation_plot(
     plot.figure.savefig(img_data, format="png", transparent=transparent, dpi=100, bbox_inches="tight")
     plt.close(plot.figure)
 
-    img_data.seek(0)
-
-    response = Response(content=img_data.read(), media_type="image/png")
+    response = Response(content=img_data.getvalue(), media_type="image/png")
     response.headers.update({
         "Cache-Control": "max-age=60"
     })

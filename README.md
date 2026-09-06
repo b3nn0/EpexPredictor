@@ -23,7 +23,7 @@ Supported Countries:
 - Maybe package it directly as a Home Assistant Add-on
 
 ## The Model
-We sample multiple locations distributed across each region. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=120).
+We sample multiple locations distributed across each region. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=180).
 This serves as the main data source.
 
 Price data is provided under CC BY 4.0 by smartd.de, retrieved via [api.energy-charts.info](https://api.energy-charts.info/) and [ENTSO-E transparency platform](https://transparency.entsoe.eu/).
@@ -50,6 +50,7 @@ Time features:
 Other:
 - Entso-E load forecast (optional, but highly recommended, especially for DE and AT)
 - Natural gas day-ahead-price, forward filled (select regions only)
+- Stage-1 price forecasts of all regions (stage-2 models only, see below)
 
 Output:
 - Electricity price
@@ -57,8 +58,14 @@ Output:
 ## How it works
 The model uses **LightGBM gradient boosting** to predict electricity prices. LightGBM automatically learns non-linear relationships and feature interactions, making it well-suited for electricity price prediction where factors like low wind+solar can cause price spikes due to merit order pricing.
 
+The prediction runs in **two stages**:
+1. **Stage 1**: one base model per region, trained on that region's own features (weather, prices, load, gas).
+2. **Stage 2**: one model per region, trained on the same features plus the **stage-1 forecasts of all regions** as extra input features.
+
+The cross-region forecasts let the model pick up on price coupling between neighboring markets (e.g. a wind lull in one region pushing up prices in connected ones), which a single-region model cannot see.
+
 ## Model performance
-For performance testing, see `predictor/performance_testing.py`.
+For performance testing, see `predictor/performance_testing.py`. It runs a rolling backtest of the full 2-stage stack: stage-1 models for all regions, then stage-2 models using the stage-1 forecasts of all regions as cross-features (set `TWO_STAGE = False` to fall back to the original single-stage evaluation).
 
 Remarks:
 - Tests were run in 2026, with data from 2025-05-15 to 2026-05-15. The model is tuned for 15 minute pricing. Since data before 2025-10-01 were using hourly pricing, actual performance might be slightly better
@@ -66,21 +73,20 @@ Remarks:
 - Tests were done with historical weather data. If the weather forecast is wrong, performance might be slightly worse in practice
 
 Results (1-day ahead prediction):
-| Region | MAE (ct/kWh) | RMSE (ct/kWh) |
-|--------|--------------|---------------|
-| DE     | 1.73         | 2.72          |
-| AT     | 1.98         | 3.12          |
-| BE     | 1.72         | 2.63          |
-| NL     | 1.74         | 2.79          |
-| SE1    | 1.63         | 2.79          |
-| SE2    | 1.47         | 2.6           |
-| SE3    | 1.99         | 2.81          |
-| SE4    | 2.34         | 3.22          |
-| DK1    | 1.9          | 2.83          |
-| DK2    | 2.15         | 3.26          |
-| ES     | 1.65         | 2.25          |
-| PT     | 2.07         | 2.76          |
-
+| Region | 1d RMSE | 1d MAE | 2d RMSE | 2d MAE | 3d RMSE | 3d MAE |
+|--------|---------|--------|---------|--------|---------|--------|
+| DE     | 2.93    | 1.73   | 3.15    | 1.88   | 3.17    | 1.91   |
+| AT     | 3.11    | 1.98   | 3.35    | 2.17   | 3.42    | 2.24   |
+| BE     | 3.15    | 1.84   | 3.39    | 2.0    | 3.43    | 2.02   |
+| NL     | 3.04    | 1.75   | 3.21    | 1.87   | 3.25    | 1.91   |
+| SE1    | 2.7     | 1.68   | 3.01    | 1.91   | 3.11    | 1.97   |
+| SE2    | 2.7     | 1.65   | 3.07    | 1.91   | 3.16    | 1.97   |
+| SE3    | 2.87    | 2.02   | 3.11    | 2.23   | 3.12    | 2.26   |
+| SE4    | 3.31    | 2.34   | 3.52    | 2.55   | 3.55    | 2.58   |
+| DK1    | 2.79    | 1.79   | 2.99    | 1.92   | 3.06    | 1.97   |
+| DK2    | 3.06    | 1.94   | 3.25    | 2.11   | 3.27    | 2.13   |
+| ES     | 2.35    | 1.7    | 2.66    | 1.96   | 2.79    | 2.06   |
+| PT     | 2.47    | 1.8    | 2.82    | 2.12   | 2.94    | 2.22   |
 
 Some observations:
 - At night, predictions are typically within 0.5 ct/kWh
@@ -94,6 +100,8 @@ Some observations:
 
 
 Feel free to generate your own plot for other time ranges or regions [here](https://epexpredictor.batzill.com/docs#/default/generate_evaluation_plot_eval_plot_get).
+
+Note that the eval plot trains the full 2-stage model stack (all regions) for the requested historical window, which is CPU-intensive. Results are therefore cached for 30 minutes per (region, range) - after that, the last result is served while a refresh runs in the background.
 
 
 # Public API

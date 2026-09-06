@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from predictor.model.priceregion import PriceRegionName
 from predictor.api.priceapi import (
     OutputFormat,
     PriceModel,
@@ -15,6 +16,7 @@ from predictor.api.priceapi import (
     PriceUnit,
     RegionPriceManager,
     app,
+    base_models,
 )
 
 
@@ -27,7 +29,7 @@ def client():
 @pytest.fixture
 def mock_region_manager(sample_region):
     """Create a mock RegionPriceManager."""
-    manager = RegionPriceManager(sample_region)
+    manager = RegionPriceManager(PriceRegionName.DE, sample_region)
     return manager
 
 
@@ -152,7 +154,7 @@ class TestRegionPriceManagerFormatShort:
 
     def test_format_short(self, sample_region):
         """Test format_short converts to short format."""
-        manager = RegionPriceManager(sample_region)
+        manager = RegionPriceManager(PriceRegionName.DE, sample_region)
 
         prices = [
             PriceModel(starts_at=datetime(2025, 11, 1, tzinfo=timezone.utc), total=10.5),
@@ -249,7 +251,7 @@ class TestRegionPriceManagerPrices:
     @pytest.mark.asyncio
     async def test_prices_applies_fixed_price(self, sample_region):
         """Test that fixed price is added to all prices."""
-        manager = RegionPriceManager(sample_region)
+        manager = RegionPriceManager(PriceRegionName.DE, sample_region)
 
         # Add cached prices
         base_time = datetime(2025, 11, 1, tzinfo=timezone.utc)
@@ -274,7 +276,7 @@ class TestRegionPriceManagerPrices:
     @pytest.mark.asyncio
     async def test_prices_applies_tax(self, sample_region):
         """Test that tax is applied to prices."""
-        manager = RegionPriceManager(sample_region)
+        manager = RegionPriceManager(PriceRegionName.DE, sample_region)
 
         # Add cached prices
         base_time = datetime(2025, 11, 1, tzinfo=timezone.utc)
@@ -298,7 +300,7 @@ class TestRegionPriceManagerPrices:
     @pytest.mark.asyncio
     async def test_prices_hourly_averaging(self, sample_region):
         """Test that hourly mode averages 15-minute prices."""
-        manager = RegionPriceManager(sample_region)
+        manager = RegionPriceManager(PriceRegionName.DE, sample_region)
 
         # Add 4 prices for one hour (15-min intervals)
         base_time = datetime(2025, 11, 1, tzinfo=timezone.utc)
@@ -330,23 +332,34 @@ class TestRegionPriceManagerUpdateDataIfNeeded:
     """Tests for RegionPriceManager.update_data_if_needed method."""
 
     @pytest.mark.asyncio
-    async def test_update_triggers_refresh_when_stale(self, sample_region):
-        """Test that update triggers refresh when data is stale."""
-        manager = RegionPriceManager(sample_region)
+    async def test_update_retrains_when_stale(self, sample_region):
+        """Test that update triggers the shared base refresh and retrains the stage-2 model."""
+        manager = RegionPriceManager(PriceRegionName.DE, sample_region)
 
-        # Mock predictor methods
-        manager.predictor.refresh_forecasts = AsyncMock()
-        manager.predictor.train = AsyncMock()
-        manager.predictor.predict = AsyncMock(
-            return_value=MagicMock(empty=False)
-        )
-        manager.predictor.to_price_dict = MagicMock(return_value={})
-        manager.predictor.pricestore.get_last_known = MagicMock(
-            return_value=datetime.now(timezone.utc)
-        )
-        manager.predictor.cleanup = MagicMock()
+        # Mock the shared base coordinator so we don't hit the network
+        mock_base_update = AsyncMock()
+        mock_base_wait = AsyncMock()
+        with patch.object(base_models, "update_in_background", mock_base_update), \
+             patch.object(base_models, "wait_update", mock_base_wait):
 
-        await manager.update_data_if_needed()
+            # Make the stage-2 model look stale so a retrain is triggered
+            manager.predictor.last_data_update = MagicMock(
+                return_value=datetime.now(timezone.utc)
+            )
+            manager.predictor.train = AsyncMock()
+            manager.predictor.predict = AsyncMock(
+                return_value=MagicMock(empty=False)
+            )
+            manager.predictor.pricestore.get_last_known = MagicMock(
+                return_value=datetime.now(timezone.utc)
+            )
+            manager.predictor.cleanup = MagicMock()
 
-        # Should have called refresh methods
-        assert manager.predictor.refresh_forecasts.called
+            await manager.update_data_if_needed()
+
+            # The shared base update should have been triggered and awaited
+            assert mock_base_update.called
+            assert mock_base_wait.called
+            # The stage-2 model should have been retrained on top of it
+            assert manager.predictor.train.called
+            assert manager.predictor.predict.called

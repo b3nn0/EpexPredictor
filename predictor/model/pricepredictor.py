@@ -6,6 +6,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import Dict, cast
 
+import numpy as np
 import pandas as pd
 import lightgbm as lgb
 
@@ -31,13 +32,21 @@ class PricePredictor:
 
     predictor: lgb.Booster | None = None
 
-    def __init__(self, region: PriceRegion, storage_dir: str | None = None):
+    # 2-stage forecasting: stage-1 predictors whose price forecasts are added as extra features
+    cross_predictors: list["PricePredictor"]
+
+    def __init__(self, region: PriceRegion, storage_dir: str | None = None, cross_predictors: list["PricePredictor"] | None = None):
         self.region = region
         self.weatherstore = WeatherStore(region, storage_dir)
         self.pricestore = PriceStore(region, storage_dir)
         self.auxstore = AuxDataStore(region, storage_dir)
         self.entsoestore = EntsoeDataStore(region, storage_dir)
         self.gasstore = GasPriceStore(region, storage_dir)
+
+        # When set, the price forecasts of these (stage-1) predictors are added as extra
+        # input features. Each cross predictor is responsible for delivering its own
+        # forecast (and for any horizon handling of its data).
+        self.cross_predictors = cross_predictors or []
 
     async def load_from_persistence(self):
         await asyncio.gather(
@@ -94,7 +103,7 @@ class PricePredictor:
         params = df.drop(columns=["price"])
 
         resultdf = pd.DataFrame(index=params.index)
-        resultdf["price"] = self.predictor.predict(params)
+        resultdf["price"] = np.asarray(self.predictor.predict(params))
 
         if fill_known:
             resultdf.update(prices_known)
@@ -112,6 +121,26 @@ class PricePredictor:
         return result
 
 
+
+    async def get_cross_features(self, start: datetime, end: datetime) -> pd.DataFrame | None:
+        """
+        Build the extra input features from the stage-1 (cross) predictors.
+
+        For each cross predictor we produce a single column named after its region:
+        the predicted price for each timestamp. Each cross predictor is responsible for
+        delivering its own forecast; any horizon handling of its data is its concern.
+        """
+        if len(self.cross_predictors) == 0:
+            return None
+
+        frames = []
+        for cp in self.cross_predictors:
+            col = f"cross_price_{cp.region.bidding_zone_entsoe}"
+            pred = await cp.predict(start, end, fill_known=False)
+            pred = pred.rename(columns={"price": col})
+            frames.append(pred)
+
+        return pd.concat(frames, axis=1, sort=True)
 
     async def prepare_dataframe(self, actual_start: datetime, end: datetime) -> pd.DataFrame | None:
         # gas prices are usually not available for today or the last few days. If forecast range is in the future, we might have nothing to ffill. Ensure we do
@@ -135,6 +164,11 @@ class PricePredictor:
             gasprices = await self.gasstore.get_data(start, end)
             gasprices = gasprices.reindex(weather.index).ffill()
             df = pd.concat([df, gasprices], axis=1, sort=True)
+
+        if len(self.cross_predictors) > 0:
+            cross_features = await self.get_cross_features(start, end)
+            if cross_features is not None:
+                df = pd.concat([df, cross_features], axis=1, sort=True)
 
         df = pd.concat([df, prices], axis=1, sort=True)
         df = df[actual_start:]
