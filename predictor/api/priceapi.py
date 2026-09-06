@@ -91,7 +91,7 @@ def api_docs():
 
 USE_PERSISTENT_TESTDATA = os.getenv("USE_PERSISTENT_TEST_DATA", "false").lower() in ("yes", "true", "t", "1")
 EPEXPREDICTOR_DATADIR = os.getenv("EPEXPREDICTOR_DATADIR")
-TRAINING_DAYS = 90
+TRAINING_DAYS = 180
 DEFAULT_TIMEZONE = "Europe/Berlin"
 
 
