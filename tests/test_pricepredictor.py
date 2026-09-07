@@ -154,12 +154,12 @@ class TestPricePredictorCleanup:
     """Tests for cleanup method."""
 
     def test_cleanup_removes_old_data(self, sample_region):
-        """Test that cleanup removes data older than 1 year."""
+        """Test that cleanup removes data older than 5 years."""
         predictor = PricePredictor(sample_region)
 
-        # Add old data (2 years ago)
+        # Add old data (more than 5 years ago)
         old_dates = pd.date_range(
-            start="2023-01-01", end="2023-01-02", freq="15min", tz="UTC"
+            start="2020-01-01", end="2020-01-02", freq="15min", tz="UTC"
         )
         old_df = pd.DataFrame({"price": [8.0] * len(old_dates)}, index=old_dates)
         old_df.index.name = "time"
@@ -176,8 +176,8 @@ class TestPricePredictorCleanup:
         # Cleanup
         predictor.cleanup()
 
-        # Old data should be removed
-        assert predictor.pricestore.data.index.min() > pd.Timestamp("2024-01-01", tz="UTC")
+        # Old data (2020) should be removed, recent data (2025) kept
+        assert predictor.pricestore.data.index.min() > pd.Timestamp("2021-01-01", tz="UTC")
 
 
 class TestPricePredictorRefreshMethods:
