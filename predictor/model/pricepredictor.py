@@ -185,9 +185,9 @@ class PricePredictor:
 
     def cleanup(self):
         """
-        Delete data older than 1 year
+        Delete data older than 5 years
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=365)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=1825)
         self.weatherstore.drop_before(cutoff)
         self.pricestore.drop_before(cutoff)
         self.auxstore.drop_before(cutoff)
