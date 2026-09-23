@@ -26,6 +26,7 @@ CROSS_REGIONS = [
     PriceRegionName.DK2,
     PriceRegionName.ES,
     PriceRegionName.PT,
+    PriceRegionName.FR
 ]
 
 # Regions to evaluate (get metrics for). Usually a subset of CROSS_REGIONS for debugging.

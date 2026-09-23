@@ -45,6 +45,7 @@ class PriceRegionName(str, Enum):
     DE = "DE"
     AT = "AT"
     BE = "BE"
+    FR = "FR"
     NL = "NL"
     SE1 = "SE1"
     SE2 = "SE2"
@@ -85,6 +86,16 @@ PRICE_REGIONS[PriceRegionName.BE] = PriceRegion(
     bidding_zone_entsoe="BE",
     latitudes=[51.27, 50.73, 49.99, 51.65],
     longitudes=[3.07, 4.79, 5.38, 2.85],
+)
+
+PRICE_REGIONS[PriceRegionName.FR] = PriceRegion(
+    country_code="FR",
+    timezone="Europe/Paris",
+    bidding_zone_energycharts="FR",
+    bidding_zone_entsoe="FR",
+    latitudes=[50.00, 48.70, 43.60, 44.00, 45.20],
+    longitudes=[2.50, 4.50, 2.30, 5.80, -0.50],
+    use_de_nat_gas_price=False
 )
 
 PRICE_REGIONS[PriceRegionName.NL] = PriceRegion(
