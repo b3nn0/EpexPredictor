@@ -26,6 +26,12 @@ def temp_storage_dir():
         yield tmpdir
 
 
+@pytest.fixture(autouse=True)
+def disable_nordpool(monkeypatch):
+    """Keep nordpool disabled by default so tests don't hit the live API."""
+    monkeypatch.delenv("EPEXPREDICTOR_USE_NORDPOOL", raising=False)
+
+
 @pytest.fixture
 def sample_region():
     """Return a sample price region for testing."""

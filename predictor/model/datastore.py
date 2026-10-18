@@ -166,28 +166,32 @@ class DataStore:
     
     async def load(self) -> Self:
         fn = self.get_storage_file()
-        if fn is not None and os.path.exists(fn):
-            log.info(f"{self.region.bidding_zone_entsoe}: loading persisted {self.storage_fn_prefix} data")
-            self.data = await asyncio.to_thread(pd.read_json, fn, compression='gzip')
+        try:
+            if fn is not None and os.path.exists(fn):
+                log.info(f"{self.region.bidding_zone_entsoe}: loading persisted {self.storage_fn_prefix} data")
+                self.data = await asyncio.to_thread(pd.read_json, fn, compression='gzip')
 
-            # Handle index type: to_json saves DatetimeIndex as epoch milliseconds,
-            # which read_json loads as Int64Index. Convert back to DatetimeIndex.
-            if pd.api.types.is_integer_dtype(self.data.index.dtype):
-                # Index values are epoch milliseconds
-                self.data.index = pd.to_datetime(self.data.index, unit='ms', utc=True)
-            elif isinstance(self.data.index, pd.DatetimeIndex) and self.data.index.tz is None:
-                # Index is DatetimeIndex but naive, localize to UTC
-                self.data.index = self.data.index.tz_localize("UTC")
-            elif not isinstance(self.data.index, pd.DatetimeIndex):
-                # Unexpected index type - log warning and attempt conversion
-                log.warning(f"{self.region.bidding_zone_entsoe}: Unexpected index type {type(self.data.index).__name__} in persisted data, "
-                           f"attempting datetime conversion")
-                self.data.index = pd.to_datetime(self.data.index, utc=True)
+                # Handle index type: to_json saves DatetimeIndex as epoch milliseconds,
+                # which read_json loads as Int64Index. Convert back to DatetimeIndex.
+                if pd.api.types.is_integer_dtype(self.data.index.dtype):
+                    # Index values are epoch milliseconds
+                    self.data.index = pd.to_datetime(self.data.index, unit='ms', utc=True)
+                elif isinstance(self.data.index, pd.DatetimeIndex) and self.data.index.tz is None:
+                    # Index is DatetimeIndex but naive, localize to UTC
+                    self.data.index = self.data.index.tz_localize("UTC")
+                elif not isinstance(self.data.index, pd.DatetimeIndex):
+                    # Unexpected index type - log warning and attempt conversion
+                    log.warning(f"{self.region.bidding_zone_entsoe}: Unexpected index type {type(self.data.index).__name__} in persisted data, "
+                            f"attempting datetime conversion")
+                    self.data.index = pd.to_datetime(self.data.index, utc=True)
 
-            self.data.index.set_names("time", inplace=True)
-            self.data.dropna(inplace=True)
+                self.data.index.set_names("time", inplace=True)
+                self.data.dropna(inplace=True)
 
-            self.last_updated = datetime.fromtimestamp(os.path.getmtime(fn), tz=timezone.utc)
+                self.last_updated = datetime.fromtimestamp(os.path.getmtime(fn), tz=timezone.utc)
+        except Exception as e:
+            log.error(f"Failed to load data store from file: {fn} -> {str(e)}")
+            raise
         return self
 
 

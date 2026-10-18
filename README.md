@@ -27,7 +27,7 @@ Supported Countries:
 We sample multiple locations distributed across each region. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=180).
 This serves as the main data source.
 
-Price data is provided under CC BY 4.0 by smartd.de, retrieved via [api.energy-charts.info](https://api.energy-charts.info/) and [ENTSO-E transparency platform](https://transparency.entsoe.eu/).
+Price data is provided under CC BY 4.0 by smartd.de, retrieved via [api.energy-charts.info](https://api.energy-charts.info/) and [ENTSO-E transparency platform](https://transparency.entsoe.eu/). Optionally (see configuration below), prices can also be fetched from the [Nord Pool data portal API](https://dataportal-api.nordpoolgroup.com/api/DayAheadPrices) as a lowest-priority fallback.
 
 Grid load data is provided by [ENTSO-E transparency platform](https://transparency.entsoe.eu/).
 
@@ -120,6 +120,14 @@ You will probably want to register with Entso-E and request an API key.
 Without Entso-E API access
 - some parameters are missing and the model will perform significantly worse, especially for DE and AT
 - Some regions will not be available (e.g. SE1-4)
+
+### Configuration (environment variables)
+
+| Variable                        | Default      | Description |
+|---------------------------------|--------------|-------------|
+| `EPEXPREDICTOR_DATADIR`         | `./data`     | Directory where the app persists its cached data. In the compose file this is mounted to `/data/`. |
+| `EPEXPREDICTOR_ENTSOE_API_KEY`  | *(unset)*    | Entso-E API key. Highly recommended: it acts as a fallback price source, is required for some regions (e.g. SE1-SE4), and provides the electrical load forecast which significantly improves model performance. |
+| `EPEXPREDICTOR_USE_NORDPOOL`    | *(disabled)* | Set to `true` (also `1`/`yes`/`on`) to additionally use the [Nord Pool data portal API](https://dataportal-api.nordpoolgroup.com/api/DayAheadPrices) as a price source. It is the lowest-priority source and only queried if energy-charts and ENTSO-E don't deliver. Nord Pool data is only available for ~4 weeks of history. **Note:** enabling this is up to you - make sure your use case complies with the Nord Pool terms of use / data license. |
 
 # Home Assistant integration
 At some point, I might create a HA addon to run everything locally.

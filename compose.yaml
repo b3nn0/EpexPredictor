@@ -16,4 +16,8 @@ services:
       # 2. It is required to source prices fore some regions (e.g. sweden)
       # 3. It offers an electical load forecast, significantly improving model performance
       # - EPEXPREDICTOR_ENTSOE_API_KEY=
+      # Optionally use the Nord Pool data portal API as an additional price source (lowest priority,
+      # only queried when energy-charts and ENTSO-E don't deliver). Enable only if your use case
+      # complies with the Nord Pool terms of use / data license.
+      # - EPEXPREDICTOR_USE_NORDPOOL=true
 

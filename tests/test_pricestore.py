@@ -1,7 +1,8 @@
 """Tests for predictor.model.pricestore module."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
@@ -145,3 +146,35 @@ class TestPriceStoreResampling:
 
         # Data should be stored (resampling happens during fetch)
         assert not store.data.empty
+
+
+class TestPriceStoreNordPoolIntegration:
+    """Live integration test against the real Nord Pool API (no mocking)."""
+
+    @pytest.fixture
+    def nordpool_store(self, sample_region, monkeypatch):
+        monkeypatch.setenv("EPEXPREDICTOR_USE_NORDPOOL", "true")
+        return PriceStore(sample_region)
+
+    @staticmethod
+    def _full_cet_day(days_ago: int = 2) -> tuple[datetime, datetime]:
+        """Return (start, end) in UTC covering one full CET calendar day."""
+        tzcet = ZoneInfo("Europe/Berlin")
+        day = (datetime.now(tzcet) - timedelta(days=days_ago)).date()
+        start = datetime(day.year, day.month, day.day, tzinfo=tzcet).astimezone(timezone.utc)
+        end = start + timedelta(days=1) - timedelta(minutes=15)
+        return start, end
+
+    @pytest.mark.asyncio
+    async def test_fetch_full_day(self, nordpool_store):
+        """A full CET day yields 96 15min slots on a UTC grid with plausible ct/kWh prices."""
+        rstart, rend = self._full_cet_day()
+        df = await nordpool_store.fetch_prices_nordpool(rstart, rend)
+        assert df is not None
+        assert len(df) == 96
+        assert str(df.index.tz) == "UTC"
+        assert (df.index[1:] - df.index[:-1] == pd.Timedelta("15min")).all()
+        assert "price" in df.columns
+        assert df["price"].notna().all()
+        # ct/kWh values, raw values well below 5000 EUR/MWh
+        assert df["price"].abs().max() < 500
