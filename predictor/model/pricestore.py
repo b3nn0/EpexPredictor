@@ -216,6 +216,11 @@ class PriceStore(DataStore):
                     url = f"https://dataportal-api.nordpoolgroup.com/api/DayAheadPrices?date={day.isoformat()}&market=DayAhead&deliveryArea={area}&currency=EUR"
                     log.info(f"{self.region.bidding_zone_entsoe}: fetching price data from nordpool: {url}")
                     async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=8)) as resp:
+                        if resp.status == 204:
+                            # Prices are only published up to ~the next day. An empty day means all
+                            # later days are unpublished too, so stop here.
+                            log.info(f"{self.region.bidding_zone_entsoe}: nordpool has no prices yet for {day.isoformat()}, stopping")
+                            break
                         if resp.status != 200:
                             log.warning(f"{self.region.bidding_zone_entsoe}: nordpool returned HTTP {resp.status} for {day.isoformat()}")
                             return None
