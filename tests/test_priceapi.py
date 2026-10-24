@@ -333,30 +333,24 @@ class TestRegionPriceManagerUpdateDataIfNeeded:
 
     @pytest.mark.asyncio
     async def test_update_retrains_when_stale(self, sample_region):
-        """Test that update ensures the shared base models and retrains the stage-2 model."""
+        """Test that update retrains the stage-2 model when its data is stale."""
         manager = RegionPriceManager(PriceRegionName.DE, sample_region)
 
-        # Mock the shared base coordinator so we don't hit the network
-        mock_base_ensure = AsyncMock()
-        with patch.object(base_models, "ensure_base_trained", mock_base_ensure):
+        # Make the stage-2 model look stale so a retrain is triggered
+        manager.predictor.last_data_update = MagicMock(
+            return_value=datetime.now(timezone.utc)
+        )
+        manager.predictor.train = AsyncMock()
+        manager.predictor.predict = AsyncMock(
+            return_value=MagicMock(empty=False)
+        )
+        manager.predictor.pricestore.get_last_known = MagicMock(
+            return_value=datetime.now(timezone.utc)
+        )
+        manager.predictor.cleanup = MagicMock()
 
-            # Make the stage-2 model look stale so a retrain is triggered
-            manager.predictor.last_data_update = MagicMock(
-                return_value=datetime.now(timezone.utc)
-            )
-            manager.predictor.train = AsyncMock()
-            manager.predictor.predict = AsyncMock(
-                return_value=MagicMock(empty=False)
-            )
-            manager.predictor.pricestore.get_last_known = MagicMock(
-                return_value=datetime.now(timezone.utc)
-            )
-            manager.predictor.cleanup = MagicMock()
+        await manager.update_data_if_needed()
 
-            await manager.update_data_if_needed()
-
-            # The shared base models should have been ensured trained
-            assert mock_base_ensure.called
-            # The stage-2 model should have been retrained on top of it
-            assert manager.predictor.train.called
-            assert manager.predictor.predict.called
+        # The stage-2 model should have been retrained
+        assert manager.predictor.train.called
+        assert manager.predictor.predict.called

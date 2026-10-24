@@ -225,18 +225,6 @@ class BaseModelCoordinator:
         """Register a live stage-2 manager so the refresh loop keeps it up to date."""
         self.managers[manager.name] = manager
 
-    async def ensure_base_trained(self):
-        """
-        Run a base update cycle if any base model is not trained yet.
-        Only relevant on cold start, before the refresh loop's first cycle finished -
-        stage-2 training needs the base models' forecasts as cross-features.
-        """
-        if all(p.is_trained() for p in self.base.values()):
-            return
-        async with self.update_lock:
-            if any(not p.is_trained() for p in self.base.values()):
-                await self._do_update()
-
     async def refresh_loop(self):
         """
         Background loop driving the shared base cycle + all live stage-2 managers.
@@ -260,9 +248,12 @@ class BaseModelCoordinator:
         now = datetime.now(timezone.utc)
         deadlines = [now + self.MAX_REFRESH_INTERVAL]
 
-        # earliest store-reported revalidation deadline across all shared stores
+        # earliest store-reported revalidation deadline, for the stores refreshed via
+        # get_data() (which re-arms the deadline each cycle). Weather/ENTSO-E refresh
+        # via refresh_range(), which never re-arms its gate, so they are scheduled by
+        # the cadence below instead.
         for p in self.base.values():
-            for store in (p.pricestore, p.gasstore, p.weatherstore, p.entsoestore, p.auxstore):
+            for store in (p.pricestore, p.gasstore):
                 ts = store.source_horizon_revalitation_ts
                 if ts is not None:
                     deadlines.append(ts)
@@ -270,7 +261,9 @@ class BaseModelCoordinator:
         # forecast (weather/entsoe) refresh cadence
         deadlines.append(self._last_weather_refresh + self.WEATHER_REFRESH_INTERVAL)
 
-        return max(1.0, min((min(deadlines) - now).total_seconds(), self.MAX_REFRESH_INTERVAL.total_seconds()))
+        # 1 minute floor: also acts as retry backoff when a refresh failed and its
+        # deadline is already in the past
+        return max(60.0, min((min(deadlines) - now).total_seconds(), self.MAX_REFRESH_INTERVAL.total_seconds()))
 
     async def _do_update(self):
         currts = datetime.now(timezone.utc)
@@ -465,13 +458,6 @@ class RegionPriceManager:
 
 
     async def update_data_if_needed(self):
-        # Stage-2 training needs trained base models (cross-features). On cold start the
-        # refresh loop may not have completed its first cycle yet, so ensure one here.
-        # Must happen before acquiring our update_lock: the refresh loop holds the base
-        # lock while calling into managers, so acquiring base->manager in the opposite
-        # order here would deadlock.
-        await base_models.ensure_base_trained()
-
         async with self.update_lock:
             # This region's data stores are shared with its base model, so the shared
             # base cycle keeps them fresh for free.
