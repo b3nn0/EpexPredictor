@@ -333,14 +333,12 @@ class TestRegionPriceManagerUpdateDataIfNeeded:
 
     @pytest.mark.asyncio
     async def test_update_retrains_when_stale(self, sample_region):
-        """Test that update triggers the shared base refresh and retrains the stage-2 model."""
+        """Test that update ensures the shared base models and retrains the stage-2 model."""
         manager = RegionPriceManager(PriceRegionName.DE, sample_region)
 
         # Mock the shared base coordinator so we don't hit the network
-        mock_base_update = AsyncMock()
-        mock_base_wait = AsyncMock()
-        with patch.object(base_models, "update_in_background", mock_base_update), \
-             patch.object(base_models, "wait_update", mock_base_wait):
+        mock_base_ensure = AsyncMock()
+        with patch.object(base_models, "ensure_base_trained", mock_base_ensure):
 
             # Make the stage-2 model look stale so a retrain is triggered
             manager.predictor.last_data_update = MagicMock(
@@ -357,9 +355,8 @@ class TestRegionPriceManagerUpdateDataIfNeeded:
 
             await manager.update_data_if_needed()
 
-            # The shared base update should have been triggered and awaited
-            assert mock_base_update.called
-            assert mock_base_wait.called
+            # The shared base models should have been ensured trained
+            assert mock_base_ensure.called
             # The stage-2 model should have been retrained on top of it
             assert manager.predictor.train.called
             assert manager.predictor.predict.called

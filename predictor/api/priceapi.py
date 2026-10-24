@@ -1,7 +1,9 @@
 import asyncio
+from contextlib import asynccontextmanager
 from io import BytesIO
 import logging
 import os
+import random
 from matplotlib.figure import Figure
 import pandas as pd
 import matplotlib
@@ -33,7 +35,20 @@ warnings.filterwarnings(
 
 
 
-app = FastAPI(title="EPEX day-ahead prediction API", description="""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load and train the shared base models before serving, then keep everything
+    # fresh in the background - requests only read caches.
+    await base_models.ensure_loaded()
+    await base_models._do_update()
+    refresh_task = asyncio.create_task(base_models.refresh_loop())
+    try:
+        yield
+    finally:
+        refresh_task.cancel()
+
+
+app = FastAPI(title="EPEX day-ahead prediction API", lifespan=lifespan, description="""
 API can be used free of charge on a fair use premise.
 There are no guarantees on availability or correctnes of the data.
 This is an open source project, feel free to host it yourself. [Source code and docs](https://github.com/b3nn0/EpexPredictor)
@@ -150,23 +165,31 @@ class BaseModelCoordinator:
     plus the shared data-fetch + base-retrain cycle.
 
     Stage-2 models (one per requested region) are owned by their RegionPriceManager
-    and wired to these base models via cross_predictors. The base models are trained
-    first; stage-2 models are then retrained by the managers on top of the fresh
-    base forecasts.
+    and registered here, so a single background refresh loop (started in the app
+    lifespan) can run the base cycle and then update every live stage-2 model.
+    Requests never trigger refreshes - they read the caches, and only the very
+    first request for a region blocks until its initial update finished.
 
-    The base update is triggered by region managers but deduplicated so a burst of
-    concurrent requests only runs one shared cycle. Base models are only retrained
-    when their underlying data actually changed.
+    The loop sleeps until the earliest upstream revalidation deadline reported by
+    the data stores (see DataStore.get_next_horizon_revalidation_time), so it wakes
+    exactly when new data is expected to be available. Checks before a deadline are
+    cheap no-ops because the stores gate their own horizon revalidation.
     """
     base: Dict[PriceRegionName, pp.PricePredictor]
+    managers: Dict[PriceRegionName, "RegionPriceManager"]
     update_lock: asyncio.Lock
     base_ready: bool = False
-    _update_task: asyncio.Task | None = None
     _last_retrain: datetime
     _last_weather_refresh: datetime
 
+    # Safety net: never sleep longer than this waiting for a store-reported deadline
+    MAX_REFRESH_INTERVAL: timedelta = timedelta(hours=1)
+    # cadence for refreshing forecasted inputs (weather + entsoe load)
+    WEATHER_REFRESH_INTERVAL: timedelta = timedelta(hours=3)
+
     def __init__(self):
         self.update_lock = asyncio.Lock()
+        self.managers = {}
         self.base = {}
         for name in AVAILABLE_REGIONS:
             region = name.to_region()
@@ -183,6 +206,12 @@ class BaseModelCoordinator:
                 return self
             log.info(f"Loading base models for {len(self.base)} regions")
             await asyncio.gather(*(p.load_from_persistence() for p in self.base.values()))
+            # Seed the forecast-refresh cadence from the persisted stores, so a restart
+            # shortly after a refresh doesn't immediately re-fetch all weather data.
+            self._last_weather_refresh = max(
+                (p.weatherstore.last_updated for p in self.base.values()),
+                default=self._last_weather_refresh,
+            )
             self.base_ready = True
         return self
 
@@ -192,22 +221,56 @@ class BaseModelCoordinator:
     def get_cross_predictors(self) -> list[pp.PricePredictor]:
         return self.cross_predictors
 
-    async def update_in_background(self):
-        """Fire the shared base update if none is in flight. Non-blocking."""
-        if self._update_task is None:
-            self._update_task = asyncio.create_task(self._run_update())
+    def register_manager(self, manager: "RegionPriceManager"):
+        """Register a live stage-2 manager so the refresh loop keeps it up to date."""
+        self.managers[manager.name] = manager
 
-    async def _run_update(self):
-        try:
-            async with self.update_lock:
+    async def ensure_base_trained(self):
+        """
+        Run a base update cycle if any base model is not trained yet.
+        Only relevant on cold start, before the refresh loop's first cycle finished -
+        stage-2 training needs the base models' forecasts as cross-features.
+        """
+        if all(p.is_trained() for p in self.base.values()):
+            return
+        async with self.update_lock:
+            if any(not p.is_trained() for p in self.base.values()):
                 await self._do_update()
-        finally:
-            self._update_task = None
 
-    async def wait_update(self):
-        """Await the in-flight base update, if any, so callers see fresh base forecasts."""
-        if self._update_task is not None:
-            await self._update_task
+    async def refresh_loop(self):
+        """
+        Background loop driving the shared base cycle + all live stage-2 managers.
+        Sleeps until the earliest revalidation deadline reported by the shared data
+        stores, so it wakes right when upstream data is expected to change.
+        """
+        while True:
+            try:
+                async with self.update_lock:
+                    await self._do_update()
+                for manager in list(self.managers.values()):
+                    await manager.update_data_if_needed()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("Refresh cycle failed - retrying at next deadline")
+
+            await asyncio.sleep(self._seconds_until_next_refresh())
+
+    def _seconds_until_next_refresh(self) -> float:
+        now = datetime.now(timezone.utc)
+        deadlines = [now + self.MAX_REFRESH_INTERVAL]
+
+        # earliest store-reported revalidation deadline across all shared stores
+        for p in self.base.values():
+            for store in (p.pricestore, p.gasstore, p.weatherstore, p.entsoestore, p.auxstore):
+                ts = store.source_horizon_revalitation_ts
+                if ts is not None:
+                    deadlines.append(ts)
+
+        # forecast (weather/entsoe) refresh cadence
+        deadlines.append(self._last_weather_refresh + self.WEATHER_REFRESH_INTERVAL)
+
+        return max(1.0, min((min(deadlines) - now).total_seconds(), self.MAX_REFRESH_INTERVAL.total_seconds()))
 
     async def _do_update(self):
         currts = datetime.now(timezone.utc)
@@ -225,13 +288,15 @@ class BaseModelCoordinator:
             p.gasstore.get_data(currts, train_end) for p in self.base.values()
         ))
 
-        # 2) refresh forecasted inputs (weather + entsoe load) on a 3h cadence
-        if (currts - self._last_weather_refresh).total_seconds() > 60 * 60 * 3:
-            await asyncio.gather(*(
-                p.refresh_forecasts(currts - timedelta(days=1), currts + timedelta(days=8))
-                for p in self.base.values()
-            ))
-            self._last_weather_refresh = currts
+        # 2) refresh forecasted inputs (weather + entsoe load) on a 3h cadence.
+        # Sequential with random spacing: WeatherStore already serializes all OpenMeteo
+        # calls globally, so gather would only burst-fire them back-to-back - which
+        # OpenMeteo dislikes.
+        if (currts - self._last_weather_refresh).total_seconds() > self.WEATHER_REFRESH_INTERVAL.total_seconds():
+            for p in self.base.values():
+                await p.refresh_forecasts(currts - timedelta(days=1), currts + timedelta(days=8))
+                await asyncio.sleep(random.uniform(5, 20))
+            self._last_weather_refresh = datetime.now(timezone.utc)
 
         # 3) retrain the base models that aren't trained yet, or whose data changed
         changed = [name for name, p in self.base.items() if not p.is_trained() or p.last_data_update() > prev[name]]
@@ -393,24 +458,23 @@ class RegionPriceManager:
 
 
     async def update_in_background(self):
-        if self.update_lock.locked() and len(self.cachedprices) > 0:
-            return # don't queue up multiple updates if we already have a filled cache
-
-        update_future = self.update_data_if_needed()
-        if len(self.cachedprices) == 0: # first call, no prices yet -> wait until first update is done
-            await update_future
-        else:
-            asyncio.create_task(update_future)
+        # Refreshes run in the background refresh loop; requests only need to block
+        # on the very first update for this region (cold cache).
+        if len(self.cachedprices) == 0:
+            await self.update_data_if_needed()
 
 
     async def update_data_if_needed(self):
+        # Stage-2 training needs trained base models (cross-features). On cold start the
+        # refresh loop may not have completed its first cycle yet, so ensure one here.
+        # Must happen before acquiring our update_lock: the refresh loop holds the base
+        # lock while calling into managers, so acquiring base->manager in the opposite
+        # order here would deadlock.
+        await base_models.ensure_base_trained()
+
         async with self.update_lock:
             # This region's data stores are shared with its base model, so the shared
-            # base cycle keeps them fresh for free. Make sure the base (stage-1) models
-            # are up to date first - the stage-2 model needs their fresh forecasts as
-            # cross-features.
-            await base_models.update_in_background()
-            await base_models.wait_update()
+            # base cycle keeps them fresh for free.
 
             currts = datetime.now(timezone.utc)
             train_start = currts - timedelta(days=TRAINING_DAYS)
@@ -444,19 +508,15 @@ class Prices:
     async def prices(self, hours: int = -1, surcharge: float = 0.0, tax_percent: float = 0.0, start_ts: datetime | None = None,
                     region: PriceRegionName = PriceRegionName.DE, unit: PriceUnit = PriceUnit.CT_PER_KWH, evaluation: bool = False, hourly: bool = False,
                     timezone: str = DEFAULT_TIMEZONE, format: OutputFormat = OutputFormat.LONG):
-        if not is_region_available(region):
-            raise HTTPException(status_code=404, detail=f"Region {region} is not available (requires an ENTSO-E API key)")
-        if region not in self.region_prices:
-            self.region_prices[region] = RegionPriceManager(region, region.to_region())
-        
-        await self.region_prices[region].ensure_loaded()
-        return await self.region_prices[region].prices(hours, surcharge, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
+        manager = await self.get_price_manager(region)
+        return await manager.prices(hours, surcharge, tax_percent, start_ts, unit, evaluation, hourly, timezone, format)
     
     async def get_price_manager(self, region: PriceRegionName):
         if not is_region_available(region):
             raise HTTPException(status_code=404, detail=f"Region {region} is not available (requires an ENTSO-E API key)")
         if region not in self.region_prices:
             self.region_prices[region] = RegionPriceManager(region, region.to_region())
+            base_models.register_manager(self.region_prices[region])
         
         await self.region_prices[region].ensure_loaded()
         return self.region_prices[region]

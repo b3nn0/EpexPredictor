@@ -189,6 +189,12 @@ class DataStore:
                 self.data.dropna(inplace=True)
 
                 self.last_updated = datetime.fromtimestamp(os.path.getmtime(fn), tz=timezone.utc)
+
+                # Restore the horizon gate (same state get_data() computes after a fetch),
+                # so a restart with fresh cache doesn't re-fetch from the upstream API.
+                last_known = self.get_last_known()
+                if last_known is not None:
+                    self.set_source_horizon(last_known, self.get_next_horizon_revalidation_time())
         except Exception as e:
             log.error(f"Failed to load data store from file: {fn} -> {str(e)}")
             raise
