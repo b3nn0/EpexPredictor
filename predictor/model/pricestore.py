@@ -42,26 +42,51 @@ class PriceStore(DataStore):
 
         # Nord Pool data is only used when explicitly enabled (licensing depends on use case)
         self.use_nordpool = os.getenv("EPEXPREDICTOR_USE_NORDPOOL", "").strip().lower() in ("1", "true", "yes", "on")
+
     @override
     def get_next_horizon_revalidation_time(self) -> datetime | None:
-        # Refresh more often when the horizon is fairly small (after 13:00 local time if the following day is not yet known)
-        localnow = datetime.now(tz=self.region.get_timezone_info())
+        # Day-ahead prices for the following day are published around 13:00 local time.
+        _PUBLISH_HOUR = 13
+        
+        # Decide the next check from the last known price cutoff, not just wall-clock time.
+        tz = self.region.get_timezone_info()
+        localnow = datetime.now(tz=tz)
+        now = datetime.now(timezone.utc)
 
-        tomorrow = localnow.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc) + timedelta(days=1)
-        if tomorrow in self.data.index:
-            nextupdate = localnow.replace(hour=13, minute=0, second=0).astimezone(timezone.utc) + timedelta(days=1) # tomorrow 13:00 local
-            log.info(f"{self.region.bidding_zone_entsoe}: prices for tomorrow are known. Next update: {nextupdate.isoformat()}")
-            return nextupdate
+        last_known = self.get_last_known()
+        if last_known is None:
+            # No data at all (cold start) -> fetch immediately
+            log.info(f"{self.region.bidding_zone_entsoe}: no price data yet -> fetching immediately")
+            return now
 
-        # No prices for tomorrow. If before 13:00 local, update at 13:00 local, else update in 5 minutes
-        if localnow.hour < 13:
-            nextupdate = localnow.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
-            log.info(f"{self.region.bidding_zone_entsoe}: local time is {localnow.isoformat()} -> next price update: {nextupdate.isoformat()}")
-            return nextupdate
+        # The horizon the source should already cover:
+        #   before 13:00 local -> up to end of today
+        #   after  13:00 local -> up to end of tomorrow
+        # Use noon of the relevant day as the "is this day known?" marker.
+        today = localnow.replace(hour=12, minute=0, second=0, microsecond=0)
+        if localnow.hour < _PUBLISH_HOUR:
+            expected_marker = today
+            next_publish = localnow.replace(hour=_PUBLISH_HOUR, minute=0, second=0, microsecond=0)
         else:
-            nextupdate = datetime.now(timezone.utc) + timedelta(minutes=5) # prices should be there.. check more often
-            log.info(f"{self.region.bidding_zone_entsoe}: expecting new prices soon -> next price update: {nextupdate}")
+            expected_marker = today + timedelta(days=1)
+            next_publish = expected_marker.replace(hour=_PUBLISH_HOUR, minute=0, second=0, microsecond=0)
+
+        if last_known < today:
+            # We don't even have today's prices -> cache is stale (e.g. startup). Fetch now.
+            log.info(f"{self.region.bidding_zone_entsoe}: prices only known until {last_known.isoformat()} -> fetching immediately")
+            return now
+
+        if last_known >= expected_marker:
+            # Expected horizon is already in the data -> wait for the next publish window.
+            nextupdate = next_publish.astimezone(timezone.utc)
+            log.info(f"{self.region.bidding_zone_entsoe}: prices known until {last_known.isoformat()}. Next update: {nextupdate.isoformat()}")
             return nextupdate
+
+        # Today is known but the next day's batch isn't published yet -> retry in 5 minutes.
+        # The refresh loop re-invokes this on each wake, giving 13:05, 13:10, 13:15, ...
+        nextupdate = now + timedelta(minutes=5)
+        log.info(f"{self.region.bidding_zone_entsoe}: expecting new prices soon -> next price update: {nextupdate.isoformat()}")
+        return nextupdate
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
         """
