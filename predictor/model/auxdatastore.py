@@ -2,7 +2,7 @@ import asyncio
 import logging
 import statistics
 from datetime import datetime, timedelta, timezone
-from typing import cast, override
+from typing import override
 
 import pandas as pd
 from astral import Observer, sun
@@ -62,27 +62,43 @@ class AuxDataStore(DataStore):
         rend = rend.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
         log.info(f"{self.region.bidding_zone_entsoe}: computing aux data from {rstart.isoformat()} to {rend.isoformat()}")
 
-        df = pd.DataFrame(data={"time": [pd.to_datetime(rstart, utc=True), pd.to_datetime(rend, utc=True)]})
-        df.set_index("time", inplace=True)
-        df = cast(pd.DataFrame, df.resample('15min').ffill())
-        df.reset_index(inplace=True)
+        times: pd.DatetimeIndex = pd.date_range(rstart, rend, freq="15min")
+        df = pd.DataFrame(index=times)
+        df.index.name = "time"
+        local = times.tz_convert(tzlocal)
 
-        df["holiday"] = df["time"].apply(lambda t: self.is_holiday(t.astimezone(tzlocal)))
+        # holiday and weekday depend only on the local date, so compute once per unique date
+        local_dates = local.normalize()
+        df["holiday"] = local_dates.map({d: self.is_holiday(d) for d in local_dates.unique()})
+        weekday = local.weekday
         for i in range(6):
-            df[f"day_{i}"] = df["time"].apply(lambda t, i=i: 1 if t.astimezone(tzlocal).weekday() == i else 0)
-        
-        
+            df[f"day_{i}"] = (weekday == i).astype(int)
+
         observer = Observer(latitude=statistics.mean(self.region.latitudes), longitude=statistics.mean(self.region.longitudes))
 
-        df["sunelevation"] = df["time"].apply(lambda t: sun.elevation(observer, t))
-        df["azimuth"] = df["time"].apply(lambda t: sun.azimuth(observer, t))
-        df["sr_influence"] = df["time"].apply(lambda t: (t - sun.sunrise(observer, date=t)).total_seconds())
-        df["ss_influence"] = df["time"].apply(lambda t: (t - sun.sunset(observer, date=t)).total_seconds())
+        # one zenith_and_azimuth call yields both angles; elevation = 90 - zenith
+        zenith_azimuth = [sun.zenith_and_azimuth(observer, t) for t in times]
+        df["sunelevation"] = [90.0 - z for z, _ in zenith_azimuth]
+        df["azimuth"] = [a for _, a in zenith_azimuth]
 
-        df["morningpeak"] = df["time"].apply(lambda t: (t - t.replace(hour=8, minute=0)).total_seconds())
-        df["eveningpeak"]  = df["time"].apply(lambda t: (t - t.replace(hour=19, minute=0)).total_seconds())
+        # sunrise/sunset only change once per day, so cache them per date
+        sunrise_cache: dict[pd.Timestamp, datetime] = {}
+        sunset_cache: dict[pd.Timestamp, datetime] = {}
+        sr_influence = []
+        ss_influence = []
+        for t in times:
+            day = t.normalize()
+            if day not in sunrise_cache:
+                sunrise_cache[day] = sun.sunrise(observer, date=t)
+                sunset_cache[day] = sun.sunset(observer, date=t)
+            sr_influence.append((t - sunrise_cache[day]).total_seconds())
+            ss_influence.append((t - sunset_cache[day]).total_seconds())
+        df["sr_influence"] = sr_influence
+        df["ss_influence"] = ss_influence
 
-        df.set_index("time", inplace=True)
+        df["morningpeak"] = ((times.hour - 8) * 3600 + times.minute * 60).astype(float)
+        df["eveningpeak"] = ((times.hour - 19) * 3600 + times.minute * 60).astype(float)
+
         return df
 
 
