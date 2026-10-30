@@ -43,10 +43,13 @@ Weather features (per sample location):
 Time features:
 - Azimuth of the sun as indicator of time of day
 - Elevation of the sun
-- Day of the week (Monday to Saturday)
-- Holiday/Sunday indicator (regional holidays weighted by fraction of regions, e.g. 0.5 if half the regions have the holiday)
-- Sunrise influence: how many minutes between sunrise and the current time slot
-- Sunset influence: how many minutes between sunset and the current time slot
+- Day of the week (Monday to Sunday)
+- Holiday indicator (regional holidays weighted by fraction of regions, e.g. 0.5 if half the regions have the holiday)
+- Slot of the day in local time (0-95, one per 15 minute interval)
+- Unix timestamp, lets the model pick up slow drift within its training window
+- Sunrise influence: how many seconds between sunrise and the current time slot
+- Sunset influence: how many seconds between sunset and the current time slot
+  (a sentinel value is used on dates without sunrise/sunset, i.e. polar day/night)
 
 Other:
 - Entso-E load forecast (optional, but highly recommended, especially for DE and AT)
@@ -76,19 +79,19 @@ Remarks:
 Results (1/2/3-day ahead prediction):
 | Region | 1d RMSE | 1d MAE | 2d RMSE | 2d MAE | 3d RMSE | 3d MAE |
 |--------|---------|--------|---------|--------|---------|--------|
-| DE     | 2.95    | 1.72   | 3.13    | 1.86   | 3.21    | 1.91   |
-| AT     | 3.13    | 1.98   | 3.35    | 2.16   | 3.43    | 2.24   |
-| BE     | 3.15    | 1.78   | 3.46    | 1.95   | 3.52    | 2.01   |
-| NL     | 3.02    | 1.72   | 3.21    | 1.85   | 3.25    | 1.89   |
-| SE1    | 2.69    | 1.67   | 3.02    | 1.91   | 3.1     | 1.97   |
-| SE2    | 2.7     | 1.64   | 3.1     | 1.91   | 3.17    | 1.98   |
-| SE3    | 2.88    | 2.02   | 3.11    | 2.23   | 3.12    | 2.25   |
-| SE4    | 3.29    | 2.33   | 3.51    | 2.53   | 3.55    | 2.58   |
-| DK1    | 2.82    | 1.77   | 2.99    | 1.91   | 3.08    | 1.97   |
-| DK2    | 3.08    | 1.95   | 3.25    | 2.1    | 3.28    | 2.12   |
-| ES     | 2.32    | 1.68   | 2.65    | 1.96   | 2.76    | 2.05   |
-| PT     | 2.45    | 1.8    | 2.81    | 2.11   | 2.92    | 2.2    |
-| FR     | 3.06    | 2.1    | 3.41    | 2.37   | 3.52    | 2.46   |
+| DE     | 2.87    | 1.62   | 3.17    | 1.84   | 3.26    | 1.92   |
+| AT     | 2.95    | 1.78   | 3.31    | 2.1    | 3.41    | 2.21   |
+| BE     | 3.09    | 1.69   | 3.48    | 1.97   | 3.56    | 2.05   |
+| NL     | 3.02    | 1.68   | 3.37    | 1.92   | 3.5     | 2.02   |
+| SE1    | 2.35    | 1.46   | 3.03    | 1.95   | 3.25    | 2.13   |
+| SE2    | 2.3     | 1.4    | 2.9     | 1.84   | 3.12    | 2.01   |
+| SE3    | 2.6     | 1.76   | 3.03    | 2.16   | 3.19    | 2.29   |
+| SE4    | 2.97    | 2.02   | 3.48    | 2.47   | 3.68    | 2.63   |
+| DK1    | 2.62    | 1.64   | 3.03    | 1.92   | 3.14    | 2.02   |
+| DK2    | 3.02    | 1.84   | 3.35    | 2.16   | 3.45    | 2.24   |
+| ES     | 1.99    | 1.39   | 2.4     | 1.73   | 2.55    | 1.84   |
+| PT     | 1.97    | 1.38   | 2.43    | 1.75   | 2.6     | 1.87   |
+| FR     | 2.69    | 1.75   | 3.15    | 2.15   | 3.31    | 2.27   |
 
 
 Some observations:

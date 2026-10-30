@@ -79,23 +79,35 @@ class AuxDataStore(DataStore):
         df["azimuth"] = [a for _, a in zenith_azimuth]
 
         # sunrise/sunset only change once per day, so cache them per date
-        sunrise_cache: dict[pd.Timestamp, datetime] = {}
-        sunset_cache: dict[pd.Timestamp, datetime] = {}
+        # no sunrise/sunset on a date (polar day/night) -> sentinel far outside the
+        # +-1 day range, so the row is not dropped as missing data
+        sunrise_cache: dict[pd.Timestamp, datetime | None] = {}
+        sunset_cache: dict[pd.Timestamp, datetime | None] = {}
         sr_influence = []
         ss_influence = []
         for t, lt in zip(times, local):
             # key by local date so sunrise/sunset are the ones of the local day
             day = lt.normalize()
             if day not in sunrise_cache:
-                sunrise_cache[day] = sun.sunrise(observer, date=lt)
-                sunset_cache[day] = sun.sunset(observer, date=lt)
-            sr_influence.append((t - sunrise_cache[day]).total_seconds())
-            ss_influence.append((t - sunset_cache[day]).total_seconds())
+                try:
+                    sunrise_cache[day] = sun.sunrise(observer, date=lt)
+                except ValueError:
+                    sunrise_cache[day] = None
+                try:
+                    sunset_cache[day] = sun.sunset(observer, date=lt)
+                except ValueError:
+                    sunset_cache[day] = None
+            sr = sunrise_cache[day]
+            ss = sunset_cache[day]
+            sr_influence.append(1e6 if sr is None else (t - sr).total_seconds())
+            ss_influence.append(1e6 if ss is None else (t - ss).total_seconds())
         df["sr_influence"] = sr_influence
         df["ss_influence"] = ss_influence
 
         # slot of day in local time (0-95). DST-shifted hours repeat their slot
         df["slot"] = local.hour * 4 + local.minute // 15
+
+        df["ts"] = times.astype("int64") // 10**9
 
         return df
 
