@@ -39,7 +39,7 @@ class PricePredictor:
         self.region = region
         self.weatherstore = WeatherStore(region, storage_dir)
         self.pricestore = PriceStore(region, storage_dir)
-        self.auxstore = AuxDataStore(region, storage_dir)
+        self.auxstore = AuxDataStore(region)
         self.entsoestore = EntsoeDataStore(region, storage_dir)
         self.gasstore = GasPriceStore(region, storage_dir)
 
@@ -52,7 +52,6 @@ class PricePredictor:
         await asyncio.gather(
             self.weatherstore.load(),
             self.pricestore.load(),
-            self.auxstore.load(),
             self.entsoestore.load(),
             self.gasstore.load()
         )

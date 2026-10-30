@@ -108,19 +108,13 @@ def sample_aux_data():
     )
     data = {
         "holiday": [0.0] * len(dates),
-        "day_0": [1 if d.weekday() == 0 else 0 for d in dates],
-        "day_1": [1 if d.weekday() == 1 else 0 for d in dates],
-        "day_2": [1 if d.weekday() == 2 else 0 for d in dates],
-        "day_3": [1 if d.weekday() == 3 else 0 for d in dates],
-        "day_4": [1 if d.weekday() == 4 else 0 for d in dates],
-        "day_5": [1 if d.weekday() == 5 else 0 for d in dates],
+        "weekday": [d.weekday() for d in dates],
         "sr_influence": [60] * len(dates),
         "ss_influence": [60] * len(dates),
+        "sunelevation": [0.0] * len(dates),
+        "azimuth": [0.0] * len(dates),
+        "slot": [d.hour * 4 + d.minute // 15 for d in dates],
     }
-    # Add time slot columns (format: i_{hour}_{minute})
-    for h in range(24):
-        for m in range(0, 60, 15):
-            data[f"i_{h}_{m}"] = [1 if (d.hour == h and d.minute == m) else 0 for d in dates]
 
     df = pd.DataFrame(data, index=dates)
     df.index.name = "time"

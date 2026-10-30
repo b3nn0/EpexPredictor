@@ -82,7 +82,7 @@ class DataStore:
         return self.source_horizon_revalitation_ts is not None and datetime.now(timezone.utc) > self.source_horizon_revalitation_ts
 
     @abc.abstractmethod
-    async def fetch_missing_data(self, start: datetime, end: datetime) -> pd.DataFrame:
+    async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
         pass
 
     @abc.abstractmethod

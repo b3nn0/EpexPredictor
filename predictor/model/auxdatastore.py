@@ -14,8 +14,8 @@ log = logging.getLogger(__name__)
 
 class AuxDataStore(DataStore):
     """
-    Used as in-memory store for computed data (holidays, slot number, day of week etc)
-    Not stored to disk, just used as a cache to make retraining faster
+    In-memory store for computed data (holidays, day of week, sun position etc)
+    Derived from the region definition alone, so it is cheap to recompute and never persisted
     """
 
     data : pd.DataFrame
@@ -24,7 +24,7 @@ class AuxDataStore(DataStore):
     update_lock: asyncio.Lock
 
 
-    def __init__(self, region : PriceRegion, storage_dir: str | None = None):
+    def __init__(self, region : PriceRegion):
         super().__init__(region)
         self.update_lock = asyncio.Lock()
 
@@ -44,7 +44,6 @@ class AuxDataStore(DataStore):
             if updated:
                 log.info(f"{self.region.bidding_zone_entsoe}: aux data updated")
                 self.data.sort_index(inplace=True)
-                await self.serialize()
             return updated
     
     @override
@@ -70,9 +69,7 @@ class AuxDataStore(DataStore):
         # holiday and weekday depend only on the local date, so compute once per unique date
         local_dates = local.normalize()
         df["holiday"] = local_dates.map({d: self.is_holiday(d) for d in local_dates.unique()})
-        weekday = local.weekday
-        for i in range(6):
-            df[f"day_{i}"] = (weekday == i).astype(int)
+        df["weekday"] = local.weekday
 
         observer = Observer(latitude=statistics.mean(self.region.latitudes), longitude=statistics.mean(self.region.longitudes))
 
@@ -86,27 +83,25 @@ class AuxDataStore(DataStore):
         sunset_cache: dict[pd.Timestamp, datetime] = {}
         sr_influence = []
         ss_influence = []
-        for t in times:
-            day = t.normalize()
+        for t, lt in zip(times, local):
+            # key by local date so sunrise/sunset are the ones of the local day
+            day = lt.normalize()
             if day not in sunrise_cache:
-                sunrise_cache[day] = sun.sunrise(observer, date=t)
-                sunset_cache[day] = sun.sunset(observer, date=t)
+                sunrise_cache[day] = sun.sunrise(observer, date=lt)
+                sunset_cache[day] = sun.sunset(observer, date=lt)
             sr_influence.append((t - sunrise_cache[day]).total_seconds())
             ss_influence.append((t - sunset_cache[day]).total_seconds())
         df["sr_influence"] = sr_influence
         df["ss_influence"] = ss_influence
 
-        df["morningpeak"] = ((times.hour - 8) * 3600 + times.minute * 60).astype(float)
-        df["eveningpeak"] = ((times.hour - 19) * 3600 + times.minute * 60).astype(float)
+        # slot of day in local time (0-95). DST-shifted hours repeat their slot
+        df["slot"] = local.hour * 4 + local.minute // 15
 
         return df
 
 
     
     def is_holiday(self, t : pd.Timestamp) -> float:
-        if t.weekday() == 6:
-            return 1
-
         date = t.date()
 
         cnt_holiday = sum(bool(date in h)
