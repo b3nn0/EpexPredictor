@@ -1,7 +1,9 @@
 # EpexPredictor App
 
 Runs the unchanged upstream FastAPI server. Home Assistant configuration is the
-only added runtime code. Prediction and background updates remain upstream-owned.
+runtime entry point. A small build-time compatibility patch spaces Energy-Charts
+requests at least 31 seconds apart, allows 60-second responses, and checks HTTP
+status before parsing. Prediction and background updates remain upstream-owned.
 
 ## Install the first development build
 
