@@ -4,17 +4,6 @@ Runs the [EpexPredictor](https://github.com/b3nn0/EpexPredictor) electricity-pri
 forecast API on Home Assistant OS. Forecasts are calculated locally from external
 market and weather data. An internet connection is required.
 
-## Installation
-
-1. Open **Settings → Apps → App store**.
-2. Open the menu, select **Repositories**, and add
-   `https://github.com/Elmardus/EpexPredictor`.
-3. Install **EpexPredictor**, review its configuration, and start it.
-4. Check the App logs while initial downloads and training complete.
-
-Currently supported architecture: **amd64**. Installation builds the container
-on the host and may take some time.
-
 ## Configuration
 
 | Option | Default | Description |
