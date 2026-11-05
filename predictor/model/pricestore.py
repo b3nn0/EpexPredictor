@@ -1,9 +1,11 @@
 import asyncio
+from functools import wraps
+from time import monotonic
 import json
 import logging
 from datetime import datetime, timedelta, timezone
 import os
-from typing import override
+from typing import ClassVar, override
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -20,6 +22,22 @@ class PriceStore(DataStore):
     """
     Fetches and caches price info from api.energy-charts.info
     """
+
+    # Energy-Charts /price allows two requests/minute, shared by all regions.
+    _energycharts_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    _energycharts_next_request: ClassVar[float] = 0.0
+
+    @staticmethod
+    def _limit_energycharts(function):
+        @wraps(function)
+        async def limited(*args, **kwargs):
+            async with PriceStore._energycharts_lock:
+                delay = PriceStore._energycharts_next_request - monotonic()
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                PriceStore._energycharts_next_request = monotonic() + 31
+                return await function(*args, **kwargs)
+        return limited
 
     data: pd.DataFrame
     region: PriceRegion
@@ -167,6 +185,7 @@ class PriceStore(DataStore):
         return bool((last_24h["price"] == 0).all())
 
     
+    @_limit_energycharts
     async def fetch_prices_energycharts(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
         try:
             if self.region.bidding_zone_energycharts is not None:
@@ -180,7 +199,8 @@ class PriceStore(DataStore):
                 url = f"https://api.energy-charts.info/price?bzn={self.region.bidding_zone_energycharts}&start={start_formatted}&end={end_formatted}"
                 log.info(f"{self.region.bidding_zone_entsoe}: fetching price data: {url}")
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=8)) as resp:
+                    async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=60)) as resp:
+                        resp.raise_for_status()
                         txt = await resp.text()
                         if "no content available" in txt:
                             return None
