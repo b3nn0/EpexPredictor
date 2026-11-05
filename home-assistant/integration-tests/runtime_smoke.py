@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import AsyncMock, patch
 
 import homeassistant  # Initialize HA's HTTP aliases before importing other clients.
+from homeassistant import loader
 from homeassistant.bootstrap import async_from_config_dict
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -19,6 +20,7 @@ async def check(config_dir):
     stamp = int(datetime.now(timezone.utc).timestamp()) // 900 * 900
     feed = {"s": [stamp, stamp + 900], "t": [-0.04, 0.12]}
     try:
+        loader.async_setup(hass)
         await async_from_config_dict({}, hass)
         with patch("custom_components.epexpredictor.config_flow.fetch", new_callable=AsyncMock, return_value=feed), patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=feed) as fetch:
             flow = hass.config_entries.flow
