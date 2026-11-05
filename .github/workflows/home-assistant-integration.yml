@@ -25,4 +25,11 @@ jobs:
       # dependencies first, then select the HA version being tested explicitly.
       - run: pip install pytest-homeassistant-custom-component==0.13.375
       - run: pip install --upgrade homeassistant==${{ matrix.homeassistant }}
-      - run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q -o asyncio_mode=auto
+      # HA 2026.11 must initialize its HTTP aliases before pytest plugins import
+      # HTTP clients. Import HA first, then run the same test suite.
+      - run: |
+          python - <<'PY'
+          import homeassistant
+          import pytest
+          raise SystemExit(pytest.main(["--confcutdir=home-assistant/integration-tests", "home-assistant/integration-tests", "-q", "-o", "asyncio_mode=auto"]))
+          PY
