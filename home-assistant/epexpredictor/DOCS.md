@@ -22,6 +22,11 @@ No host port is published by default. Home Assistant can reach the API over the
 internal App network without publishing a port. An empty or disabled host-port
 field in **Configuration → Network** is therefore expected.
 
+When the optional EpexPredictor custom integration is installed, this App
+announces its endpoint through Supervisor discovery after startup. Home Assistant
+then offers setup for the region and price adjustments. Discovery does not
+install the integration automatically. The API also remains usable independently.
+
 The API listens internally on TCP port **8000**. Use the Supervisor-generated App
 hostname: the App slug with underscores replaced by hyphens, for example
 `<repository-id>-epexpredictor`. A manually installed local App uses
