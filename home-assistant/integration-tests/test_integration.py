@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
+from aiohttp import ClientConnectionError
 import pytest
 
 pytest.importorskip("homeassistant")
@@ -62,6 +63,37 @@ async def test_evaluation_is_not_requested_until_enabled(hass, feed):
     await hass.async_block_till_done()
     assert any(call.kwargs.get("evaluation") is True for call in feed[1].call_args_list)
     assert hass.states.get(evaluation_id).state == "-0.04"
+
+
+@pytest.mark.asyncio
+async def test_public_server_and_missing_local_app(hass, feed):
+    result = await hass.config_entries.flow.async_init("epexpredictor", context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"source": "local"})
+    assert result["errors"]["base"] == "no_local_app"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"source": "public"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {k: CONFIG[k] for k in ("region", "surcharge", "tax_percent")})
+    assert result["data"]["url"] == "https://epexpredictor.batzill.com"
+    await hass.async_block_till_done()
+
+
+@pytest.mark.asyncio
+async def test_evaluation_failure_keeps_regular_forecast(hass, feed):
+    entry = MockConfigEntry(domain="epexpredictor", data=CONFIG)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    coordinator = entry.runtime_data
+    prediction = coordinator.data["prediction"]
+
+    async def fetch(session, config, evaluation=False):
+        if evaluation:
+            raise ClientConnectionError("evaluation unavailable")
+        return prediction
+
+    with patch.object(coordinator, "async_contexts", return_value=iter(["evaluation"])), patch("custom_components.epexpredictor.fetch", side_effect=fetch):
+        await coordinator.async_refresh()
+    assert coordinator.last_update_success
+    assert coordinator.data["prediction"] == prediction
+    assert coordinator.data["evaluation"] is None
 
 
 @pytest.mark.asyncio
