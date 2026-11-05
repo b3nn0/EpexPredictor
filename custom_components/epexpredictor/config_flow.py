@@ -40,15 +40,15 @@ class EpexPredictorFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self):
         self.url = ""
-        self.source = "local"
+        self._server_source = "local"
 
     async def async_step_user(self, user_input=None):
         if user_input:
-            self.source = user_input["source"]
-            if self.source == "public":
+            self._server_source = user_input["source"]
+            if self._server_source == "public":
                 self.url = PUBLIC_URL
                 return await self.async_step_profile()
-            if self.source == "custom":
+            if self._server_source == "custom":
                 return await self.async_step_custom()
             return await self.async_step_local()
         return self.async_show_form(step_id="user", data_schema=vol.Schema({vol.Required("source", default="local"): SelectSelector(SelectSelectorConfig(options=["local", "public", "custom"], translation_key="source"))}))
@@ -95,7 +95,7 @@ class EpexPredictorFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input:
             try:
-                config = await validate(self.hass, user_input | {"url": self.url, "source": self.source})
+                config = await validate(self.hass, user_input | {"url": self.url, "source": self._server_source})
             except DuplicateProfile:
                 return self.async_abort(reason="already_configured")
             except (ClientError, TimeoutError, ValueError):
