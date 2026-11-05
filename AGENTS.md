@@ -10,3 +10,4 @@
 - Write App documentation for general users. Keep installation-specific notes out of published docs, distinguish server settings from request parameters, and put build details in developer documentation.
 - Do not document numeric transport limits, timeouts or health-check grace periods; those implementation values may change.
 - Put App installation instructions in the root README, installed-App usage and configuration in DOCS.md, and manual development setup in DEVELOPMENT.md.
+- Keep the thin integration under custom_components/epexpredictor. It handles UI configuration, discovery and HTTP sensor data only; do not duplicate server calculations.

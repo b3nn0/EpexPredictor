@@ -1,0 +1,19 @@
+name: Home Assistant integration
+on:
+  push:
+    paths: ["custom_components/**", "home-assistant/integration-tests/**", ".github/workflows/home-assistant-integration.yml"]
+  pull_request:
+    paths: ["custom_components/**", "home-assistant/integration-tests/**", ".github/workflows/home-assistant-integration.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install homeassistant==2026.10.2 pytest-homeassistant-custom-component
+      - run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q

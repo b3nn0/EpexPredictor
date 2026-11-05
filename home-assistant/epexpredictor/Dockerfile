@@ -1,6 +1,6 @@
 FROM python:3.13-slim-bookworm
 
-ARG BUILD_VERSION=0.1.1
+ARG BUILD_VERSION=0.2.0
 ARG BUILD_ARCH=amd64
 # This is the unchanged upstream source reviewed for this App release.
 ARG UPSTREAM_REVISION=cb3f98ec222f9fddd13308c304c54467ad3bccb6
@@ -19,6 +19,7 @@ RUN apt-get update \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY run.py /run.py
+COPY ha_app.py /code/ha_app.py
 # No Supervisor watchdog: upstream completes initial data loading/training before
 # accepting HTTP requests. An eager watchdog would repeatedly interrupt that work.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=60m --retries=3 \
