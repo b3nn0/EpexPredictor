@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 import os
-from typing import override
+from typing import ClassVar, override
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -18,27 +18,26 @@ from .priceregion import PriceRegion
 
 log = logging.getLogger(__name__)
 
-# Energy-Charts /price allows two requests/minute, shared by all regions.
-_energycharts_lock = asyncio.Lock()
-_energycharts_next_request = 0.0
-
-
-def _limit_energycharts(function):
-    @wraps(function)
-    async def limited(*args, **kwargs):
-        global _energycharts_next_request
-        async with _energycharts_lock:
-            delay = _energycharts_next_request - monotonic()
-            if delay > 0:
-                await asyncio.sleep(delay)
-            _energycharts_next_request = monotonic() + 31
-            return await function(*args, **kwargs)
-    return limited
-
 class PriceStore(DataStore):
     """
     Fetches and caches price info from api.energy-charts.info
     """
+
+    # Energy-Charts /price allows two requests/minute, shared by all regions.
+    _energycharts_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    _energycharts_next_request: ClassVar[float] = 0.0
+
+    @staticmethod
+    def _limit_energycharts(function):
+        @wraps(function)
+        async def limited(*args, **kwargs):
+            async with PriceStore._energycharts_lock:
+                delay = PriceStore._energycharts_next_request - monotonic()
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                PriceStore._energycharts_next_request = monotonic() + 31
+                return await function(*args, **kwargs)
+        return limited
 
     data: pd.DataFrame
     region: PriceRegion
