@@ -21,5 +21,8 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-      - run: pip install homeassistant==${{ matrix.homeassistant }} pytest-homeassistant-custom-component
+      # The fixture package can lag new HA releases. Install its current test
+      # dependencies first, then select the HA version being tested explicitly.
+      - run: pip install pytest-homeassistant-custom-component==0.13.375
+      - run: pip install --upgrade homeassistant==${{ matrix.homeassistant }}
       - run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q -o asyncio_mode=auto
