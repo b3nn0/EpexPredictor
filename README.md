@@ -20,9 +20,6 @@ Supported Countries:
 - Others can be added relatively easily, if there is interest
 
 
-## Lookout
-- Maybe package it directly as a Home Assistant Add-on
-
 ## The Model
 We sample multiple locations distributed across each region. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=180).
 This serves as the main data source.
@@ -132,7 +129,7 @@ Without Entso-E API access
 | `EPEXPREDICTOR_ENTSOE_API_KEY`  | *(unset)*    | Entso-E API key. Highly recommended: it acts as a fallback price source, is required for some regions (e.g. SE1-SE4), and provides the electrical load forecast which significantly improves model performance. |
 | `EPEXPREDICTOR_USE_NORDPOOL`    | *(disabled)* | Set to `true` (also `1`/`yes`/`on`) to additionally use the [Nord Pool data portal API](https://dataportal-api.nordpoolgroup.com/api/DayAheadPrices) as a price source. It is the lowest-priority source and only queried if energy-charts and ENTSO-E don't deliver. Nord Pool data is only available for ~4 weeks of history. **Note:** enabling this is up to you - make sure your use case complies with the Nord Pool terms of use / data license. |
 
-# Home Assistant integration
+# Home Assistant App and Integration
 
 Run the forecast server locally using the Home Assistant App. Requires
 Home Assistant OS on a supported **amd64** system.
@@ -156,7 +153,8 @@ Manual development installation is described separately in the
 
 The optional [EpexPredictor integration](custom_components/epexpredictor/README.md)
 provides UI-based setup. Install it separately; adding the App repository does not
-install the integration. See its README for HACS and manual installation instructions.
+install the integration. See its [README](custom_components/epexpredictor/README.md)
+for HACS and manual installation instructions.
 
 ### Manual Configuration:
 ```yaml
