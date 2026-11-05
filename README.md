@@ -139,7 +139,7 @@ Home Assistant OS on a supported **amd64** system.
 
 1. Open **Settings → Apps → App store** in Home Assistant.
 2. Open the menu and select **Repositories**.
-3. Add `https://github.com/Elmardus/EpexPredictor`.
+3. Add this repository's GitHub URL (`https://github.com/<owner>/<repository>`).
 4. Find **EpexPredictor** in the App store and select **Install**.
 5. Review **Configuration**, then select **Start** on the App's information page.
 6. Check **Logs** while the first data download and model training complete.
@@ -151,6 +151,77 @@ For configuration and API access after installation, see the
 [App documentation](home-assistant/epexpredictor/DOCS.md).
 Manual development installation is described separately in the
 [developer guide](home-assistant/DEVELOPMENT.md).
+
+### Configuration:
+```yaml
+# Make sure you change the parameters region, surcharge and taxPercent according to your electricity plan
+sensor:
+  - platform: rest
+    resource: "https://epexpredictor.batzill.com/prices_short?region=DE&surcharge=13.70084&taxPercent=19&unit=EUR_PER_KWH&hours=120"
+    method: GET
+    unique_id: epex_price_prediction
+    name: "EPEX Price Prediction"
+    unit_of_measurement: €/kWh
+    value_template: "{{ value_json.t[0] }}"
+    json_attributes:
+      - s
+      - t
+
+  # If you want to evaluate performance in real time, you can add another sensor like this
+  # and plot it in the same diagram as the actual prediction sensor
+
+  #- platform: rest
+  #  resource: "https://epexpredictor.batzill.com/prices_short?region=DE&surcharge=13.70084&taxPercent=19&evaluation=true&unit=EUR_PER_KWH&hours=120"
+  #  method: GET
+  #  unique_id: epex_price_prediction_evaluation
+  #  name: "EPEX Price Prediction Evaluation"
+  #  unit_of_measurement: €/kWh
+  #  value_template: "{{ value_json.t[0] }}"
+  #  json_attributes:
+  #    - s
+  #    - t
+```
+
+### Display, e.g. via Plotly Graph Card:
+```yaml
+type: custom:plotly-graph
+time_offset: 26h
+layout:
+  yaxis9:
+    fixedrange: true
+    visible: false
+    minallowed: 0
+    maxallowed: 1
+entities:
+  - entity: sensor.epex_price_prediction
+    name: EPEX Price Prediction
+    unit_of_measurement: ct/kWh
+    texttemplate: "%{y:.0f}"
+    mode: lines+text
+    textposition: top right
+    filters:
+      - fn: |-
+          ({xs, ys, meta}) => {
+            return {
+              xs: xs.concat(meta.s.map(s => s*1000)),
+              ys: ys.concat(meta.t).map(t => +t*100)
+            }
+          }
+  - entity: ""
+    name: Now
+    yaxis: y9
+    showlegend: false
+    line:
+      width: 1
+      dash: dot
+      color: orange
+    x: $ex [Date.now(), Date.now()]
+    "y":
+      - 0
+      - 1
+hours_to_show: 30
+refresh_interval: 10
+```
 
 # evcc integration
 
