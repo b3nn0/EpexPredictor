@@ -7,7 +7,7 @@ Connect to the local App, the public server, or another self-hosted EpexPredicto
 
 ### HACS
 
-Once the integration is published for HACS, open **HACS → Custom repositories**, add this repository's GitHub
+Open **HACS → Custom repositories**, add this repository's GitHub
 URL with type **Integration**, and download **EpexPredictor**. Restart Home
 Assistant, then follow the setup steps below.
 
