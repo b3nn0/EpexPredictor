@@ -9,12 +9,17 @@ permissions:
   contents: read
 jobs:
   test:
+    name: HA ${{ matrix.homeassistant }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        homeassistant: ["2026.10.0", "2026.11.0"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
           cache: pip
-      - run: pip install homeassistant==2026.10.2 pytest-homeassistant-custom-component
+      - run: pip install homeassistant==${{ matrix.homeassistant }} pytest-homeassistant-custom-component
       - run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q -o asyncio_mode=auto
