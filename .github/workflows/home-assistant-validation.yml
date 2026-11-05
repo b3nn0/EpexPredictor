@@ -1,0 +1,22 @@
+name: Home Assistant packaging validation
+on:
+  push:
+    paths: ["custom_components/**", "hacs.json", ".github/workflows/home-assistant-validation.yml"]
+  pull_request:
+    paths: ["custom_components/**", "hacs.json", ".github/workflows/home-assistant-validation.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          comment: "false"
