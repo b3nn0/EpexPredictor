@@ -1,0 +1,89 @@
+# EpexPredictor
+
+Runs the [EpexPredictor](https://github.com/b3nn0/EpexPredictor) electricity-price
+forecast API on Home Assistant OS. Forecasts are calculated locally from external
+market and weather data. An internet connection is required.
+
+## Configuration
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `entsoe_api_key` | Empty | Optional ENTSO-E Transparency Platform key. Adds price and load data; required for some regions. See upstream documentation for regional requirements. |
+| `use_nordpool` | `false` | Enables Nord Pool as an additional upstream price source. Enable only when the intended use complies with its licence and terms. |
+
+The data directory is managed by the App. Training duration, background refresh
+schedule and base-model regions are controlled by upstream code, not App settings.
+Forecast region, horizon and price adjustments are API request parameters. This
+allows different consumers to request different forecasts from the same server.
+
+## Network and API access
+
+No host port is published by default. Home Assistant can reach the API over the
+internal App network without publishing a port. An empty or disabled host-port
+field in **Configuration → Network** is therefore expected.
+
+When the optional EpexPredictor custom integration is installed, this App
+announces its endpoint through Supervisor discovery after startup. Home Assistant
+then offers setup for the region and price adjustments. Discovery does not
+install the integration automatically. The API also remains usable independently.
+
+The API listens internally on TCP port **8000**. Use the Supervisor-generated App
+hostname: the App slug with underscores replaced by hyphens, for example
+`<repository-id>-epexpredictor`. A manually installed local App uses
+`local-epexpredictor`.
+
+- `/prices`: prices with ISO timestamps and the published-price cutoff.
+- `/prices_short`: parallel `s` (Unix seconds) and `t` (prices) arrays.
+- `/docs`: interactive upstream API documentation, including evaluation endpoints.
+
+Example request with no tax or surcharge:
+
+```text
+http://<app-hostname>:8000/prices_short?region=DE&unit=EUR_PER_KWH
+```
+
+| Request parameter | Meaning |
+| --- | --- |
+| `region` | Supported bidding zone. |
+| `hours` | Requested output horizon, subject to available forecast inputs. |
+| `unit` | `CT_PER_KWH`, `EUR_PER_KWH` or `EUR_PER_MWH`. |
+| `surcharge` | Fixed addition in **ct/kWh**, before percentage tax and unit conversion. |
+| `taxPercent` | Percentage applied after adding the surcharge. |
+| `timezone` | IANA timezone for output and interpreting timestamps without an offset. |
+| `startTs` | Optional starting timestamp. |
+| `hourly` | Return hourly averages. |
+| `evaluation` | Predict known periods as well, for model evaluation. |
+
+Consult `/docs` for current defaults and the complete API. Home Assistant's
+built-in REST integration can consume the compact format. Choose an appropriate
+horizon for HA's entity attribute-size constraints. Account for adjustments
+already applied by consumers to avoid adding them twice.
+
+For browser or other LAN-client access, publish a host port in App network
+settings, then open `http://<ha-host>:<published-port>/docs`. The API has no
+authentication; do not publish it directly to the internet.
+
+## Startup and stored data
+
+The first start downloads historical data and trains the forecasting models.
+Check the App logs for progress and allow startup to finish. Forecasts update
+automatically while the App is running.
+
+Cached data is stored under `/data`, survives restarts and is included in backups
+that include this App.
+
+## Troubleshooting
+
+- **Slow startup:** inspect logs for download/training progress. Repeated restarts
+  interrupt that work.
+- **Source errors:** check internet access and upstream data availability. An
+  ENTSO-E key provides an additional source where supported.
+- **Health check:** the container checks API responsiveness after a startup grace
+  period. This does not verify forecast freshness or quality. No Supervisor HTTP
+  watchdog is enabled by default.
+
+## Data sources
+
+For model details and data-source credits, see the
+[EpexPredictor project](https://github.com/b3nn0/EpexPredictor).
+The data providers' licences and attribution requirements apply.

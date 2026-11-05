@@ -20,9 +20,6 @@ Supported Countries:
 - Others can be added relatively easily, if there is interest
 
 
-## Lookout
-- Maybe package it directly as a Home Assistant Add-on
-
 ## The Model
 We sample multiple locations distributed across each region. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=180).
 This serves as the main data source.
@@ -132,17 +129,34 @@ Without Entso-E API access
 | `EPEXPREDICTOR_ENTSOE_API_KEY`  | *(unset)*    | Entso-E API key. Highly recommended: it acts as a fallback price source, is required for some regions (e.g. SE1-SE4), and provides the electrical load forecast which significantly improves model performance. |
 | `EPEXPREDICTOR_USE_NORDPOOL`    | *(disabled)* | Set to `true` (also `1`/`yes`/`on`) to additionally use the [Nord Pool data portal API](https://dataportal-api.nordpoolgroup.com/api/DayAheadPrices) as a price source. It is the lowest-priority source and only queried if energy-charts and ENTSO-E don't deliver. Nord Pool data is only available for ~4 weeks of history. **Note:** enabling this is up to you - make sure your use case complies with the Nord Pool terms of use / data license. |
 
-# Home Assistant integration
-At some point, I might create a HA addon to run everything locally.
-For now, you have to either use my server, or run it yourself.
+# Home Assistant App and Integration
 
-Note: Home Assistant only supports a limited amount of data in state attributes. Therefore, we use the "short format" output, and limit the time to 120 hours.
-If you need more, you will have to be more creative.
-Personally, I provide the data as a HA "service" (now "action") using pyscript, and then call this service to work with the data.
+Run the forecast server locally using the Home Assistant App. Requires
+Home Assistant OS on a supported **amd64** system.
 
+1. Open **Settings → Apps → App store** in Home Assistant.
+2. Open the menu and select **Repositories**.
+3. Add this repository's GitHub URL (`https://github.com/<owner>/<repository>`).
+4. Find **EpexPredictor** in the App store and select **Install**.
+5. Review **Configuration**, then select **Start** on the App's information page.
+6. Check **Logs** while the first data download and model training complete.
 
+The container is built on the host during installation. Future App releases are
+managed through the same Home Assistant App store.
 
-### Configuration:
+For configuration and API access after installation, see the
+[App documentation](home-assistant/epexpredictor/DOCS.md).
+Manual development installation is described separately in the
+[developer guide](home-assistant/DEVELOPMENT.md).
+
+### UI Configuration
+
+The optional [EpexPredictor integration](custom_components/epexpredictor/README.md)
+provides UI-based setup. Install it separately; adding the App repository does not
+install the integration. See its [README](custom_components/epexpredictor/README.md)
+for HACS and manual installation instructions.
+
+### Manual Configuration:
 ```yaml
 # Make sure you change the parameters region, surcharge and taxPercent according to your electricity plan
 sensor:

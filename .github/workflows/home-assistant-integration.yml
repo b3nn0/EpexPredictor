@@ -1,0 +1,32 @@
+name: Home Assistant integration
+on:
+  push:
+    paths: ["custom_components/**", "home-assistant/integration-tests/**", ".github/workflows/home-assistant-integration.yml"]
+  pull_request:
+    paths: ["custom_components/**", "home-assistant/integration-tests/**", ".github/workflows/home-assistant-integration.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    name: HA ${{ matrix.homeassistant }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        homeassistant: ["2026.10.0", "2026.11.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - if: matrix.homeassistant == '2026.10.0'
+        run: pip install homeassistant==${{ matrix.homeassistant }} 'pytest-homeassistant-custom-component>=0.13'
+      - if: matrix.homeassistant == '2026.10.0'
+        run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q -o asyncio_mode=auto
+      # The published fixture package does not yet support HA 2026.11.
+      # Exercise real setup/entities/unload without that package on both versions.
+      - if: matrix.homeassistant != '2026.10.0'
+        run: pip install homeassistant==${{ matrix.homeassistant }}
+      - run: python home-assistant/integration-tests/runtime_smoke.py

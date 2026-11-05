@@ -1,0 +1,23 @@
+name: EpexPredictor
+version: "0.2.1"
+slug: epexpredictor
+description: Run the upstream electricity price forecast server locally
+url: https://github.com/Elmardus/EpexPredictor
+arch:
+  - amd64
+startup: application
+boot: auto
+init: false
+discovery:
+  - epexpredictor
+ports:
+  8000/tcp: null
+ports_description:
+  8000/tcp: Optional LAN access to the unauthenticated forecast API
+webui: http://[HOST]:[PORT:8000]/docs
+options:
+  entsoe_api_key: ""
+  use_nordpool: false
+schema:
+  entsoe_api_key: password?
+  use_nordpool: bool

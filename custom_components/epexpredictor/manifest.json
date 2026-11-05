@@ -1,0 +1,14 @@
+{
+  "domain": "epexpredictor",
+  "name": "EpexPredictor",
+  "after_dependencies": ["hassio"],
+  "codeowners": ["@Elmardus"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Elmardus/EpexPredictor",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Elmardus/EpexPredictor/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
