@@ -152,7 +152,13 @@ For configuration and API access after installation, see the
 Manual development installation is described separately in the
 [developer guide](home-assistant/DEVELOPMENT.md).
 
-### Configuration:
+### UI Configuration
+
+The optional [EpexPredictor integration](custom_components/epexpredictor/README.md)
+provides UI-based setup. Install it separately; adding the App repository does not
+install the integration. See its README for HACS and manual installation instructions.
+
+### Manual Configuration:
 ```yaml
 # Make sure you change the parameters region, surcharge and taxPercent according to your electricity plan
 sensor:

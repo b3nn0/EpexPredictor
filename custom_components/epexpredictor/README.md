@@ -1,8 +1,26 @@
 # EpexPredictor integration
 
-A thin Home Assistant client for the EpexPredictor API. Install the integration
-separately from the optional server App; it can also connect to a public or
-otherwise self-hosted server. Prediction and training remain on the server.
+A Home Assistant integration for the EpexPredictor API. Install it separately
+from the optional server App; it can also connect to a public or self-hosted
+EpexPredictor server. Prediction and training remain on the server.
+
+## Installation
+
+### HACS
+
+HACS requires a published repository version containing `custom_components/epexpredictor`.
+An integration available only on a development branch must be installed manually
+until that version is published; the App repository alone does not install it.
+
+Once available, open **HACS → Custom repositories**, add this repository's GitHub
+URL with type **Integration**, and download **EpexPredictor**. Restart Home
+Assistant, then follow the setup steps below.
+
+### Manual installation
+
+Copy the `custom_components/epexpredictor` directory from a repository version
+containing the integration into `<HA configuration directory>/custom_components/`.
+Restart Home Assistant, then follow the setup steps below.
 
 ## Setup
 
