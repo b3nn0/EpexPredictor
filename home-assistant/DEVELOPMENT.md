@@ -27,8 +27,11 @@ must also include discovery support to test its discovered setup flow.
 HACS installs the integration separately from the App store. Both packages live
 in this repository; installing either one does not install the other.
 
-Its dedicated workflow tests the minimum supported HA version and a current
-stable release with mocked config-flow and entity tests in Linux. Update the
-current-release matrix entry as new stable releases become available. Packaging
-is checked separately by hassfest and the HACS validation action. Forecast server
-and App tests remain independent. Keep network calls mocked in integration tests.
+Its dedicated workflow runs the full config-flow and entity suite on the minimum
+supported HA version, plus a runtime smoke check on that version and the current
+stable release. The smoke check covers UI setup, forecast state/attributes,
+disabled evaluation and unloading, with API requests mocked. The current release
+uses this check until the published HA test fixtures support it. Update the
+matrix and extend the full suite to that version when compatible fixtures are
+available. Packaging is checked separately by hassfest and the HACS action.
+Forecast server and App tests remain independent.
