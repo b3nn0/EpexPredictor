@@ -232,4 +232,4 @@ refresh_interval: 10
 # evcc integration
 
 [evcc](https://evcc.io/) is an open-source EV charging controller that can optimize charging based on electricity prices.
-It now has native support for EpexPredictor, see [docs](https://docs.evcc.io/docs/tariffs#epex-predictor-predicted-epex-spot-prices)
+It now has native support for EpexPredictor, see [docs](https://docs.evcc.io/docs/tariffs#epex-predictor-predicted-epex-spot-prices)
