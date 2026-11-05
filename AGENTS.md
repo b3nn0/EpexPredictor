@@ -7,3 +7,5 @@
 - Never log API keys. Do not add a custom integration until the App is working.
 - The App builds a pinned upstream revision; update that pin deliberately when syncing upstream.
 - Keep necessary transport compatibility fixes as small documented build-time patches in the App directory; do not rewrite the engine.
+- Write App documentation for general users. Keep installation-specific notes out of published docs, distinguish server settings from request parameters, and put build details in developer documentation.
+- Do not document numeric transport limits, timeouts or health-check grace periods; those implementation values may change.
