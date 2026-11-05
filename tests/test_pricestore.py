@@ -26,8 +26,8 @@ def energycharts_clock(monkeypatch):
         clock["now"] += delay
         await yield_to_loop(0)
 
-    monkeypatch.setattr(pricestore, "_energycharts_lock", asyncio.Lock())
-    monkeypatch.setattr(pricestore, "_energycharts_next_request", 0.0)
+    monkeypatch.setattr(PriceStore, "_energycharts_lock", asyncio.Lock())
+    monkeypatch.setattr(PriceStore, "_energycharts_next_request", 0.0)
     monkeypatch.setattr(pricestore, "monotonic", lambda: clock["now"])
     monkeypatch.setattr(pricestore.asyncio, "sleep", sleep)
     return clock
