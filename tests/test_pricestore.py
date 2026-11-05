@@ -1,13 +1,81 @@
 """Tests for predictor.model.pricestore module."""
 
+import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
+import aiohttp
 
+from predictor.model import pricestore
 from predictor.model.pricestore import PriceStore
+from predictor.model.priceregion import PriceRegionName
+
+
+@pytest.fixture(autouse=True)
+def energycharts_clock(monkeypatch):
+    """Isolate the shared limiter and advance a fake clock instead of waiting."""
+    clock = {"now": 100.0, "waits": []}
+    yield_to_loop = asyncio.sleep
+
+    async def sleep(delay):
+        clock["waits"].append(delay)
+        clock["now"] += delay
+        await yield_to_loop(0)
+
+    monkeypatch.setattr(pricestore, "_energycharts_lock", asyncio.Lock())
+    monkeypatch.setattr(pricestore, "_energycharts_next_request", 0.0)
+    monkeypatch.setattr(pricestore, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(pricestore.asyncio, "sleep", sleep)
+    return clock
+
+
+@pytest.fixture
+def energycharts_response():
+    response = AsyncMock()
+    response.raise_for_status = MagicMock()
+    response.text.return_value = json.dumps({"unix_seconds": [1730419200], "price": [80.5]})
+    with patch("predictor.model.pricestore.aiohttp.ClientSession") as session:
+        client = session.return_value.__aenter__.return_value
+        client.get = MagicMock()
+        client.get.return_value.__aenter__.return_value = response
+        yield client, response
+
+
+class TestEnergyChartsRequests:
+    @pytest.mark.asyncio
+    async def test_regions_share_limiter_and_first_request_is_immediate(self, energycharts_clock, energycharts_response):
+        client, _ = energycharts_response
+        starts = []
+        context = client.get.return_value
+
+        def request(*args, **kwargs):
+            starts.append(energycharts_clock["now"])
+            return context
+
+        client.get.side_effect = request
+        start = datetime(2024, 11, 1, tzinfo=timezone.utc)
+        stores = [PriceStore(region.to_region()) for region in (PriceRegionName.DE, PriceRegionName.NL)]
+        results = await asyncio.gather(*(store.fetch_prices_energycharts(start, start) for store in stores))
+        assert starts == [100.0, 131.0]
+        assert energycharts_clock["waits"] == [31.0]
+        assert all(result is not None for result in results)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", [429, 503])
+    async def test_http_error_is_reported_before_parsing_and_next_request_can_run(self, status, sample_region, energycharts_response, caplog):
+        _, response = energycharts_response
+        error = aiohttp.ClientResponseError(MagicMock(real_url="https://api.energy-charts.info/price"), (), status=status)
+        response.raise_for_status.side_effect = [error, None]
+        store = PriceStore(sample_region)
+        start = datetime(2024, 11, 1, tzinfo=timezone.utc)
+        assert await store.fetch_prices_energycharts(start, start) is None
+        response.text.assert_not_awaited()
+        assert str(status) in caplog.text
+        assert await store.fetch_prices_energycharts(start, start) is not None
 
 
 class TestPriceStoreInit:
@@ -48,6 +116,7 @@ class TestPriceStoreFetchMissingData:
         with patch("aiohttp.ClientSession") as mock_session:
             mock_response = AsyncMock()
             mock_response.status = 200
+            mock_response.raise_for_status = MagicMock()
             # The actual code uses resp.text() then json.loads()
             mock_response.text = AsyncMock(return_value=json.dumps(mock_response_data))
 
