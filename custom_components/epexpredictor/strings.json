@@ -1,0 +1,89 @@
+{
+  "title": "EpexPredictor",
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Choose a forecast server",
+        "data": {
+          "source": "Server"
+        }
+      },
+      "local": {
+        "title": "Choose a local App",
+        "data": {
+          "url": "Local server"
+        }
+      },
+      "custom": {
+        "title": "Connect to a server",
+        "data": {
+          "url": "Server base URL"
+        }
+      },
+      "profile": {
+        "title": "Configure a price forecast",
+        "data": {
+          "region": "Region",
+          "surcharge": "Fixed surcharge (ct/kWh, before percentage tax)",
+          "tax_percent": "Tax (%)"
+        },
+        "data_description": {
+          "surcharge": "Fixed costs added before applying the tax percentage. Do not include costs that another consumer already adds.",
+          "tax_percent": "Percentage applied after adding the surcharge."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot fetch a valid forecast. Check the server URL, region and server logs. A local App may still be training.",
+      "invalid_url": "Enter an HTTP(S) base URL without credentials, query parameters or a fragment.",
+      "no_local_app": "No running EpexPredictor App was discovered. Start an App with discovery support, or choose a custom server URL."
+    },
+    "abort": {
+      "already_configured": "This server and region are already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Forecast settings",
+        "data": {
+          "url": "Server base URL",
+          "region": "Region",
+          "surcharge": "Fixed surcharge (ct/kWh, before percentage tax)",
+          "tax_percent": "Tax (%)"
+        },
+        "data_description": {
+          "surcharge": "Fixed costs added before applying the tax percentage. Do not include costs that another consumer already adds.",
+          "tax_percent": "Percentage applied after adding the surcharge."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot fetch a valid forecast with these settings.",
+      "already_configured": "This server and region are already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "prediction": {
+        "name": "Price prediction"
+      },
+      "evaluation": {
+        "name": "Price prediction evaluation"
+      },
+      "fetched": {
+        "name": "Forecast fetched"
+      }
+    }
+  },
+  "selector": {
+    "source": {
+      "options": {
+        "local": "Local App",
+        "public": "Public EpexPredictor server",
+        "custom": "Custom server"
+      }
+    }
+  }
+}

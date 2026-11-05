@@ -1,5 +1,5 @@
 name: EpexPredictor
-version: "0.1.1"
+version: "0.2.0"
 slug: epexpredictor
 description: Run the upstream electricity price forecast server locally
 url: https://github.com/Elmardus/EpexPredictor/tree/home-assistant-app/home-assistant/epexpredictor
@@ -8,6 +8,8 @@ arch:
 startup: application
 boot: auto
 init: false
+discovery:
+  - epexpredictor
 ports:
   8000/tcp: null
 ports_description:

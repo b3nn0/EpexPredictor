@@ -23,4 +23,4 @@ jobs:
       # Import and inspect upstream without running its network/training lifespan.
       - run: >-
           docker run --rm --entrypoint python epexpredictor-ha:test -c
-          "from predictor.api.priceapi import app; assert '/prices_short' in app.openapi()['paths']"
+          "from ha_app import app; assert '/prices_short' in app.openapi()['paths']"

@@ -21,7 +21,7 @@ def main():
         os.environ["EPEXPREDICTOR_ENTSOE_API_KEY"] = key.strip()
     else:
         os.environ.pop("EPEXPREDICTOR_ENTSOE_API_KEY", None)
-    os.execvp("uvicorn", ["uvicorn", "predictor.api.priceapi:app", "--host", "0.0.0.0", "--port", "8000"])
+    os.execvp("uvicorn", ["uvicorn", "ha_app:app", "--host", "0.0.0.0", "--port", "8000"])
 
 
 if __name__ == "__main__":

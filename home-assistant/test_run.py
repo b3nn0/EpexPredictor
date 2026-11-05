@@ -18,7 +18,7 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(os.environ["EPEXPREDICTOR_ENTSOE_API_KEY"], "key")
             self.assertEqual(os.environ["EPEXPREDICTOR_USE_NORDPOOL"], "true")
             self.assertEqual(os.environ["EPEXPREDICTOR_DATADIR"], "/data")
-            self.assertEqual(execute.call_args.args[1], ["uvicorn", "predictor.api.priceapi:app", "--host", "0.0.0.0", "--port", "8000"])
+            self.assertEqual(execute.call_args.args[1], ["uvicorn", "ha_app:app", "--host", "0.0.0.0", "--port", "8000"])
 
     def test_empty_key_does_not_enable_key_only_regions(self):
         with patch.object(Path, "read_text", return_value='{}'), patch.dict(os.environ, {"EPEXPREDICTOR_ENTSOE_API_KEY": "old"}, clear=True), patch.object(os, "execvp"):
