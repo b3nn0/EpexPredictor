@@ -15,5 +15,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
+          cache: pip
       - run: pip install homeassistant==2026.10.2 pytest-homeassistant-custom-component
-      - run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q
+      - run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q -o asyncio_mode=auto

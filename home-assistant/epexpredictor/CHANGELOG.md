@@ -1,3 +1,7 @@
+# 0.2.0
+
+- Announce the ready server through Supervisor discovery for the optional HA integration.
+
 # 0.1.1
 
 - Serialize Energy-Charts requests to respect the provider's rate limit.
