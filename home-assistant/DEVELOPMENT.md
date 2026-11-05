@@ -5,10 +5,9 @@ revision pinned in its Dockerfile; it does not copy source from the parent check
 Update that pin deliberately when syncing upstream. Upstream dependencies remain
 unpinned, so the source pin alone does not make builds fully reproducible.
 
-Keep packaging and necessary compatibility patches here. Preserve upstream
-forecasting logic and prefer upstream fixes over maintaining parallel behavior.
-The Energy-Charts transport patch is applied during the container build; patch
-application must fail if a future source revision is incompatible.
+Keep packaging here and preserve upstream forecasting logic. The pinned source
+includes the upstream Energy-Charts rate-limit fix; no build-time source patch
+is needed.
 
 For local development, copy the `epexpredictor` directory to
 `/addons/epexpredictor` and install from Local apps. Validate configuration,

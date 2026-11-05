@@ -1,20 +1,18 @@
 FROM python:3.13-slim-bookworm
 
-ARG BUILD_VERSION=0.2.0
+ARG BUILD_VERSION=0.2.1
 ARG BUILD_ARCH=amd64
 # This is the unchanged upstream source reviewed for this App release.
-ARG UPSTREAM_REVISION=cb3f98ec222f9fddd13308c304c54467ad3bccb6
+ARG UPSTREAM_REVISION=9c0c17c6eb6af297b1ba933af930c0acf3689ff9
 LABEL io.hass.version="${BUILD_VERSION}" io.hass.type="addon" io.hass.arch="${BUILD_ARCH}"
 
 ENV PYTHONUNBUFFERED=1 EPEXPREDICTOR_DATADIR=/data
 WORKDIR /code
 ADD https://github.com/b3nn0/EpexPredictor/archive/${UPSTREAM_REVISION}.tar.gz /tmp/upstream.tar.gz
-COPY energycharts.patch /tmp/energycharts.patch
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 patch \
+    && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && tar -xzf /tmp/upstream.tar.gz --strip-components=1 -C /code \
-    && patch -p1 < /tmp/energycharts.patch \
     && rm /tmp/upstream.tar.gz \
     && pip install --no-cache-dir -r requirements.txt
 
