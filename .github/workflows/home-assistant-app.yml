@@ -1,0 +1,26 @@
+name: Home Assistant App
+on:
+  push:
+    paths: ["home-assistant/**", ".github/workflows/home-assistant-app.yml"]
+  pull_request:
+    paths: ["home-assistant/**", ".github/workflows/home-assistant-app.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m unittest discover -s home-assistant -p test_run.py -v
+      - run: |
+          pip install PyYAML
+          python -c "import yaml; yaml.safe_load(open('home-assistant/epexpredictor/config.yaml'))"
+      - run: docker build -t epexpredictor-ha:test home-assistant/epexpredictor
+      # Import and inspect upstream without running its network/training lifespan.
+      - run: >-
+          docker run --rm --entrypoint python epexpredictor-ha:test -c
+          "from predictor.api.priceapi import app; assert '/prices_short' in app.openapi()['paths']"
