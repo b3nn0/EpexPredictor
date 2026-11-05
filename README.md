@@ -1,29 +1,5 @@
 # EPEX day-ahead price prediction
 
-This fork packages [b3nn0/EpexPredictor](https://github.com/b3nn0/EpexPredictor)
-as a Home Assistant App. The prediction engine is provided by the upstream project.
-
-## Install the Home Assistant App
-
-Requires Home Assistant OS on a supported **amd64** system.
-
-1. Open **Settings → Apps → App store** in Home Assistant.
-2. Open the menu and select **Repositories**.
-3. Add `https://github.com/Elmardus/EpexPredictor`.
-4. Find **EpexPredictor** in the App store and select **Install**.
-5. Review **Configuration**, then select **Start** on the App's information page.
-6. Check **Logs** while the first data download and model training complete.
-
-The container is built on the host during installation. Future App releases are
-managed through the same Home Assistant App store, rather than HACS.
-
-For configuration and API access after installation, see the
-[App documentation](home-assistant/epexpredictor/DOCS.md).
-Manual development installation is described separately in the
-[developer guide](home-assistant/DEVELOPMENT.md).
-
-## Upstream project
-
 This is a simple statistical model to predict EPEX day-ahead prices based on various parameters.
 It works to a reasonably good degree. Better than many of the commercial solutions.
 This repository includes
@@ -43,6 +19,25 @@ Supported Countries:
 - Portugal
 - Others can be added relatively easily, if there is interest
 
+
+## Install the Home Assistant App
+
+Requires Home Assistant OS on a supported **amd64** system.
+
+1. Open **Settings → Apps → App store** in Home Assistant.
+2. Open the menu and select **Repositories**.
+3. Add `https://github.com/Elmardus/EpexPredictor`.
+4. Find **EpexPredictor** in the App store and select **Install**.
+5. Review **Configuration**, then select **Start** on the App's information page.
+6. Check **Logs** while the first data download and model training complete.
+
+The container is built on the host during installation. Future App releases are
+managed through the same Home Assistant App store.
+
+For configuration and API access after installation, see the
+[App documentation](home-assistant/epexpredictor/DOCS.md).
+Manual development installation is described separately in the
+[developer guide](home-assistant/DEVELOPMENT.md).
 
 ## The Model
 We sample multiple locations distributed across each region. We fetch [Weather data from Open-Meteo.com](https://open-meteo.com/) for those locations for the past n days (default n=180).
@@ -155,8 +150,8 @@ Without Entso-E API access
 
 # Home Assistant integration
 For the locally hosted App, follow the installation instructions above and use
-its internal URL from the App documentation. The following upstream REST example
-illustrates consuming the API; it can also use the upstream public server.
+its internal URL from the App documentation. The following REST example
+illustrates consuming the API; it can also use the public server.
 
 Home Assistant constrains the amount of data in entity attributes. Use the compact
 format and choose a suitable output horizon for the consumer.
