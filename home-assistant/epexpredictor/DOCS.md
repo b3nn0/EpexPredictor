@@ -1,63 +1,106 @@
-# EpexPredictor App
+# EpexPredictor
 
-Runs the unchanged upstream FastAPI server. Home Assistant configuration is the
-runtime entry point. A small build-time compatibility patch spaces Energy-Charts
-requests at least 31 seconds apart, allows 60-second responses, and checks HTTP
-status before parsing. Prediction and background updates remain upstream-owned.
+Runs the [EpexPredictor](https://github.com/b3nn0/EpexPredictor) electricity-price
+forecast API on Home Assistant OS. Forecasts are calculated locally from external
+market and weather data. An internet connection is required.
 
-## Install the first development build
+## Installation
 
-Copy this `epexpredictor` directory to `/addons/epexpredictor` on Home Assistant OS,
-then check for updates in the App store and install it from **Local apps**.
-The initial version targets amd64; other architectures require a verified build.
-The build downloads upstream revision
-`cb3f98ec222f9fddd13308c304c54467ad3bccb6` directly. It does not build uncommitted
-changes elsewhere in this checkout. Update `UPSTREAM_REVISION` deliberately when
-updating the bundled server. Upstream dependencies are currently unpinned, so the
-source revision alone does not guarantee byte-for-byte reproducible builds.
+1. Open **Settings → Apps → App store**.
+2. Open the menu, select **Repositories**, and add
+   `https://github.com/Elmardus/EpexPredictor`.
+3. Install **EpexPredictor**, review its configuration, and start it.
+4. Check the App logs while initial downloads and training complete.
 
-## Options
+Currently supported architecture: **amd64**. Installation builds the container
+on the host and may take some time.
 
-- **entsoe_api_key:** optional ENTSO-E transparency API key. Recommended upstream
-  for additional price/load data; some regions require it. NL can run without it.
-- **use_nordpool:** optional extra upstream data source, disabled by default.
-  Enable only when your use complies with its data licence/terms.
+## Configuration
 
-Region, horizon, VAT and surcharge are API request parameters, not server options.
-Your existing HA tariff calculation can therefore remain unchanged.
+| Option | Default | Description |
+| --- | --- | --- |
+| `entsoe_api_key` | Empty | Optional ENTSO-E Transparency Platform key. Adds price and load data; required for some regions. See upstream documentation for regional requirements. |
+| `use_nordpool` | `false` | Enables Nord Pool as an additional upstream price source. Enable only when the intended use complies with its licence and terms. |
 
-## Startup and storage
+The data directory is managed by the App. Training duration, background refresh
+schedule and base-model regions are controlled by upstream code, not App settings.
+Forecast region, horizon and price adjustments are API request parameters. This
+allows different consumers to request different forecasts from the same server.
 
-First startup downloads historical inputs and trains shared models for all
-available regions. It may take a long time and use substantial CPU/memory.
-Selecting NL in a request does not limit initial training to NL.
-Inspect App logs for progress. The built-in container health check waits up to
-one hour for startup; becoming unhealthy does not itself restart the container.
-No Supervisor HTTP watchdog is configured to interrupt slow first-time training.
-The check verifies API responsiveness, not forecast freshness or quality.
+## Network and API access
 
-Upstream uses `/data` for its persistent data caches. Normal App backups include
-this storage. The server still needs internet access for market/weather inputs.
-No HA API access, host networking, privileged mode or HA configuration mount is needed.
+No host port is published by default. Home Assistant can reach the API over the
+internal App network without publishing a port. An empty or disabled host-port
+field in **Configuration → Network** is therefore expected.
 
-## Connect
+The API listens internally on TCP port **8000**. Use the Supervisor-generated App
+hostname: the App slug with underscores replaced by hyphens, for example
+`<repository-id>-epexpredictor`. A manually installed local App uses
+`local-epexpredictor`.
 
-For a locally installed App, HA Core can use:
+- `/prices`: prices with ISO timestamps and the published-price cutoff.
+- `/prices_short`: parallel `s` (Unix seconds) and `t` (prices) arrays.
+- `/docs`: interactive upstream API documentation, including evaluation endpoints.
+
+Example request with no tax or surcharge:
 
 ```text
-http://local-epexpredictor:8000/prices_short?region=NL&hours=120&unit=EUR_PER_KWH&taxPercent=21&surcharge=0&timezone=Europe%2FAmsterdam
+http://<app-hostname>:8000/prices_short?region=DE&unit=EUR_PER_KWH
 ```
 
-For a repository install, use the Supervisor-generated App hostname instead of
-`local-epexpredictor`. Keep published NordPool prices preferred in the consumer.
-The returned price includes VAT but no fixed costs with the example above; keep
-the existing HA cost addition to avoid applying VAT twice.
+| Request parameter | Meaning |
+| --- | --- |
+| `region` | Supported bidding zone. |
+| `hours` | Requested output horizon, subject to available forecast inputs. |
+| `unit` | `CT_PER_KWH`, `EUR_PER_KWH` or `EUR_PER_MWH`. |
+| `surcharge` | Fixed addition in **ct/kWh**, before percentage tax and unit conversion. |
+| `taxPercent` | Percentage applied after adding the surcharge. |
+| `timezone` | IANA timezone for output and interpreting timestamps without an offset. |
+| `startTs` | Optional starting timestamp. |
+| `hourly` | Return hourly averages. |
+| `evaluation` | Predict known periods as well, for model evaluation. |
 
-LAN port publishing is off by default. To open `/docs` in your browser, map port
-8000 in the App network settings. The API has no authentication; do not expose it
-to the internet. Internal HA access does not require a published port.
+Consult `/docs` for current defaults and the complete API. Home Assistant's
+built-in REST integration can consume the compact format. Choose an appropriate
+horizon for HA's entity attribute-size constraints. Account for adjustments
+already applied by consumers to avoid adding them twice.
 
-Before switching live sensors, verify a nonempty `/prices_short` response with
-equal-length `s` and `t` arrays, 15-minute timestamps and the requested horizon.
-Then verify cache persistence after restart and monitor resource use. Leave the
-public feed configured until this local validation passes.
+For browser or other LAN-client access, publish a host port in App network
+settings, then open `http://<ha-host>:<published-port>/docs`. The API has no
+authentication; do not publish it directly to the internet.
+
+## Operation and resources
+
+First startup downloads historical inputs and trains shared models for all
+available base regions. Requesting one region does not restrict that initial
+work to that region. Later requests use cached forecasts; background tasks update
+inputs and retrain models when needed.
+
+The process keeps libraries, models and data in memory between updates. Resource
+requirements depend on available regions, stored history and requested operations;
+training temporarily increases CPU and memory use. This is a long-running server,
+not a scheduled process that exits after producing each forecast.
+
+Data caches live under `/data`, survive restarts and are included in backups
+that include this App. Models are retrained at startup using cached data.
+No privileged mode, HA API access or HA configuration-directory mount is needed.
+
+## Troubleshooting
+
+- **Slow startup:** inspect logs for download/training progress. Repeated restarts
+  interrupt that work.
+- **Source errors:** check internet access and upstream data availability. An
+  ENTSO-E key provides an additional source where supported.
+- **Health check:** the container checks API responsiveness after a startup grace
+  period. This does not verify forecast freshness or quality. No Supervisor HTTP
+  watchdog is enabled by default.
+
+## Upstream and data sources
+
+Prediction and training are provided by EpexPredictor. This App adds HA packaging
+and a small transport patch that spaces Energy-Charts requests, allows slower
+responses and checks HTTP status before parsing. See the App changelog for changes.
+
+Upstream code uses the BSD-3-Clause licence. Market and weather data retain their
+providers' licences and attribution requirements; see the upstream project and
+API documentation for data-source credits.

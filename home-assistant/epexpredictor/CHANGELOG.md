@@ -1,6 +1,6 @@
 # 0.1.1
 
-- Serialize Energy-Charts requests to respect its two-per-minute limit.
+- Serialize Energy-Charts requests to respect the provider's rate limit.
 - Allow slower historical responses and report HTTP errors before JSON parsing.
 
 # 0.1.0

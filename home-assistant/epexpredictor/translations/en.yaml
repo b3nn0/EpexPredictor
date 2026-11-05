@@ -1,0 +1,9 @@
+configuration:
+  entsoe_api_key:
+    name: ENTSO-E API key
+    description: Optional Transparency Platform key for additional price and load data. Some regions require it.
+  use_nordpool:
+    name: Enable Nord Pool data source
+    description: Use Nord Pool as an additional price source only when permitted by its licence and terms.
+network:
+  8000/tcp: Optional host port for the forecast API. Leave disabled for internal Home Assistant access only.
