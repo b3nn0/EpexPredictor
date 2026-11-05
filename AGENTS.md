@@ -6,3 +6,4 @@
 - Add interface checks only where they verify real configuration or lifecycle behavior.
 - Never log API keys. Do not add a custom integration until the App is working.
 - The App builds a pinned upstream revision; update that pin deliberately when syncing upstream.
+- Keep necessary transport compatibility fixes as small documented build-time patches in the App directory; do not rewrite the engine.
