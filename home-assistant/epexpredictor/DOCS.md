@@ -1,60 +1,89 @@
-# Using EpexPredictor
+# EpexPredictor
 
-EpexPredictor runs locally and provides electricity price forecasts for Home
-Assistant and other applications. It needs an internet connection to download
-market and weather data.
+Runs the [EpexPredictor](https://github.com/b3nn0/EpexPredictor) electricity-price
+forecast API on Home Assistant OS. Forecasts are calculated locally from external
+market and weather data. An internet connection is required.
 
-## Start the App
+## Configuration
 
-1. Open the App's **Configuration** tab and review the settings below.
-2. Select **Start** on the **Info** tab.
-3. Open **Logs** to follow progress. The first start can take a while as historical
-   data is downloaded and the forecasting model is prepared.
+| Option | Default | Description |
+| --- | --- | --- |
+| `entsoe_api_key` | Empty | Optional ENTSO-E Transparency Platform key. Adds price and load data; required for some regions. See upstream documentation for regional requirements. |
+| `use_nordpool` | `false` | Enables Nord Pool as an additional upstream price source. Enable only when the intended use complies with its licence and terms. |
 
-Once startup finishes, the App keeps its forecasts up to date automatically.
+The data directory is managed by the App. Training duration, background refresh
+schedule and base-model regions are controlled by upstream code, not App settings.
+Forecast region, horizon and price adjustments are API request parameters. This
+allows different consumers to request different forecasts from the same server.
 
-## Settings
+## Network and API access
 
-| Setting | What to enter |
+No host port is published by default. Home Assistant can reach the API over the
+internal App network without publishing a port. An empty or disabled host-port
+field in **Configuration → Network** is therefore expected.
+
+When the optional EpexPredictor custom integration is installed, this App
+announces its endpoint through Supervisor discovery after startup. Home Assistant
+then offers setup for the region and price adjustments. Discovery does not
+install the integration automatically. The API also remains usable independently.
+
+The API listens internally on TCP port **8000**. Use the Supervisor-generated App
+hostname: the App slug with underscores replaced by hyphens, for example
+`<repository-id>-epexpredictor`. A manually installed local App uses
+`local-epexpredictor`.
+
+- `/prices`: prices with ISO timestamps and the published-price cutoff.
+- `/prices_short`: parallel `s` (Unix seconds) and `t` (prices) arrays.
+- `/docs`: interactive upstream API documentation, including evaluation endpoints.
+
+Example request with no tax or surcharge:
+
+```text
+http://<app-hostname>:8000/prices_short?region=DE&unit=EUR_PER_KWH
+```
+
+| Request parameter | Meaning |
 | --- | --- |
-| **ENTSO-E API key** | An optional ENTSO-E Transparency Platform key for additional price and load data. Leave empty if you do not have a key. Some regions require one. |
-| **Enable Nord Pool data source** | Enable to use Nord Pool as an additional price source, provided your use complies with its licence and terms. Disabled by default. |
+| `region` | Supported bidding zone. |
+| `hours` | Requested output horizon, subject to available forecast inputs. |
+| `unit` | `CT_PER_KWH`, `EUR_PER_KWH` or `EUR_PER_MWH`. |
+| `surcharge` | Fixed addition in **ct/kWh**, before percentage tax and unit conversion. |
+| `taxPercent` | Percentage applied after adding the surcharge. |
+| `timezone` | IANA timezone for output and interpreting timestamps without an offset. |
+| `startTs` | Optional starting timestamp. |
+| `hourly` | Return hourly averages. |
+| `evaluation` | Predict known periods as well, for model evaluation. |
 
-Choose your region, surcharge and tax percentage when setting up the Home
-Assistant integration or another application that uses these forecasts.
+Consult `/docs` for current defaults and the complete API. Home Assistant's
+built-in REST integration can consume the compact format. Choose an appropriate
+horizon for HA's entity attribute-size constraints. Account for adjustments
+already applied by consumers to avoid adding them twice.
 
-## Use the forecasts in Home Assistant
+For browser or other LAN-client access, publish a host port in App network
+settings, then open `http://<ha-host>:<published-port>/docs`. The API has no
+authentication; do not publish it directly to the internet.
 
-Install the EpexPredictor integration separately from the App, then:
+## Startup and stored data
 
-1. Open **Settings → Devices & services**.
-2. Select **Configure** on the discovered EpexPredictor card. Alternatively, select
-   **Add integration → EpexPredictor → Local App**.
-3. Choose your region and enter your surcharge and tax percentage.
+The first start downloads historical data and trains the forecasting models.
+Check the App logs for progress and allow startup to finish. Forecasts update
+automatically while the App is running.
 
-The integration adds forecast sensors that can be used in dashboards. See the
-[integration guide](../../custom_components/epexpredictor/README.md) for installation,
-settings and entity descriptions.
+Cached data is stored under `/data`, survives restarts and is included in backups
+that include this App.
 
-## Open the API in a browser
+## Troubleshooting
 
-This is optional; the Home Assistant integration does not need a published port.
-An empty or disabled port under **Configuration → Network** is normal.
+- **Slow startup:** inspect logs for download/training progress. Repeated restarts
+  interrupt that work.
+- **Source errors:** check internet access and upstream data availability. An
+  ENTSO-E key provides an additional source where supported.
+- **Health check:** the container checks API responsiveness after a startup grace
+  period. This does not verify forecast freshness or quality. No Supervisor HTTP
+  watchdog is enabled by default.
 
-To use the interactive API documentation from another device on your network:
+## Data sources
 
-1. Set a host port for the API under **Configuration → Network** and save.
-2. Restart the App if prompted.
-3. Open `http://<ha-host>:<host-port>/docs` in your browser.
-
-The API has no authentication. Keep access on your local network and do not expose
-the port directly to the internet.
-
-## If something is not working
-
-- **The App is still starting:** check **Logs** for progress and let it finish.
-  Restarting repeatedly interrupts downloads and model preparation.
-- **The integration cannot find the App:** check that the App is running and up
-  to date, then try **Add integration → EpexPredictor → Local App** again.
-- **Forecasts are unavailable:** check **Logs** for connection or data-source
-  errors. Confirm internet access and check the API key if one is configured.
+For model details and data-source credits, see the
+[EpexPredictor project](https://github.com/b3nn0/EpexPredictor).
+The data providers' licences and attribution requirements apply.
