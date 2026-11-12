@@ -1,6 +1,6 @@
 """Exercise config flows and entities against a real HA test instance."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 from aiohttp import ClientConnectionError
@@ -109,6 +109,21 @@ async def test_discovery_and_options(hass, feed):
     assert options["type"] == "create_entry"
     await hass.async_block_till_done()
     assert entry.runtime_data.config["region"] == "DE"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url,minutes", [
+    ("http://predictor:8000", 5),
+    ("https://another-server.example", 5),
+    ("https://epexpredictor.batzill.com", 15),
+    ("https://EPEXPREDICTOR.batzill.com/", 15),
+])
+async def test_polling_uses_effective_url(hass, url, minutes):
+    from custom_components.epexpredictor import ForecastCoordinator
+
+    entry = MockConfigEntry(domain="epexpredictor", data=CONFIG, options={"url": url})
+    entry.add_to_hass(hass)
+    assert ForecastCoordinator(hass, entry).update_interval == timedelta(minutes=minutes)
 
 
 @pytest.mark.parametrize("data", [{}, {"s": [1, 2], "t": [1]}, {"s": [2, 1], "t": [1, 2]}, {"s": [1], "t": [float("nan")]}, {"s": [1], "t": [True]}])

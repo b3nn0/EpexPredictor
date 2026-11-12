@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 import logging
+from urllib.parse import urlsplit
 
 from aiohttp import ClientError
 from homeassistant.const import Platform
@@ -10,15 +11,16 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import fetch
-from .const import DOMAIN, settings
+from .const import DOMAIN, PUBLIC_URL, settings
 
 LOGGER = logging.getLogger(__name__)
 
 
 class ForecastCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry):
-        super().__init__(hass, LOGGER, name=DOMAIN, config_entry=entry, update_interval=timedelta(hours=1))
         self.config = settings(entry)
+        minutes = 15 if urlsplit(self.config["url"]).hostname == urlsplit(PUBLIC_URL).hostname else 5
+        super().__init__(hass, LOGGER, name=DOMAIN, config_entry=entry, update_interval=timedelta(minutes=minutes))
         self.session = async_get_clientsession(hass)
 
     async def _async_update_data(self):

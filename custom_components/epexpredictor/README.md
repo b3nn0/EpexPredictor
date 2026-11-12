@@ -55,7 +55,10 @@ To follow another region, add another EpexPredictor integration entry.
   with published prices, so you can compare predictions with actual market prices.
   Disabled by default; enable it from the device's entity list when needed.
 
-Forecasts and the current price update automatically. If the server cannot be
+Forecasts refresh every 15 minutes from the public server and every 5 minutes
+from other servers. The current price advances automatically each quarter-hour.
+Forecast arrays are available to live graphs but are excluded from Recorder;
+the sensor's price history is still recorded. If the server cannot be
 reached, the sensors show **Unavailable** until the connection recovers.
 
 ## Forecast graph

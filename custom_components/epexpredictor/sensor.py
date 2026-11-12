@@ -15,6 +15,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class ForecastSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
+    _unrecorded_attributes = frozenset({"s", "t"})
 
     def __init__(self, entry, key):
         super().__init__(entry.runtime_data, context=key)
