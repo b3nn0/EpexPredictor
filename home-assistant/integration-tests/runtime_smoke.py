@@ -38,7 +38,7 @@ async def check(config_dir):
     feed = {"s": [stamp, stamp + 900], "t": [-0.04, 0.12]}
     try:
         loader.async_setup(hass)
-        config = {"recorder": {"db_url": "sqlite://", "auto_purge": False}}
+        config = {"recorder": {"db_url": f"sqlite:///{config_dir / 'history.db'}", "auto_purge": False}}
         await async_from_config_dict({}, hass)
         assert await async_setup_component(hass, "recorder", config)
         await hass.async_start()
