@@ -18,7 +18,6 @@ from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.db_schema import StateAttributes, States, StatesMeta
 from homeassistant.components.recorder.util import session_scope
 from homeassistant.helpers import entity_registry as er
-from homeassistant.setup import async_setup_component
 from sqlalchemy import select
 
 
@@ -39,8 +38,10 @@ async def check(config_dir):
     try:
         loader.async_setup(hass)
         config = {"recorder": {"db_url": f"sqlite:///{config_dir / 'history.db'}", "auto_purge": False}}
-        await async_from_config_dict({}, hass)
-        assert await async_setup_component(hass, "recorder", config)
+        # Bootstrap Recorder with its database resources, without unrelated
+        # default integrations that need additional optional dependencies.
+        with patch("homeassistant.bootstrap.DEFAULT_INTEGRATIONS", set()):
+            assert await async_from_config_dict(config, hass) is hass
         await hass.async_start()
         with patch("custom_components.epexpredictor.config_flow.fetch", new_callable=AsyncMock, return_value=feed), patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=feed) as fetch:
             flow = hass.config_entries.flow
@@ -72,7 +73,7 @@ async def check(config_dir):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.WARNING)
     with TemporaryDirectory() as temp:
         config_dir = Path(temp)
         source = Path(__file__).resolve().parents[2] / "custom_components"
