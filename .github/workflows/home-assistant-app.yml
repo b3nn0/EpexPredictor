@@ -9,7 +9,16 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: App ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,8 +28,17 @@ jobs:
       - run: |
           pip install PyYAML
           python -c "import yaml; yaml.safe_load(open('home-assistant/epexpredictor/config.yaml'))"
-      - run: docker build -t epexpredictor-ha:test home-assistant/epexpredictor
+      - run: docker build --build-arg BUILD_ARCH=${{ matrix.arch }} -t epexpredictor-ha:test home-assistant/epexpredictor
       # Import and inspect upstream without running its network/training lifespan.
       - run: >-
           docker run --rm --entrypoint python epexpredictor-ha:test -c
           "from ha_app import app; assert '/prices_short' in app.openapi()['paths']"
+      - name: Check native LightGBM training and prediction
+        run: >-
+          docker run --rm --entrypoint python epexpredictor-ha:test -c
+          "import lightgbm as lgb; import numpy as np;
+          x = np.arange(80).reshape(40, 2); y = np.arange(40);
+          model = lgb.train({'verbosity': -1, 'num_threads': 1, 'min_data_in_leaf': 2}, lgb.Dataset(x, label=y), num_boost_round=3);
+          result = model.predict(x); assert len(result) == 40 and np.isfinite(result).all()"
+      - name: Check S6 startup, discovery, persistence and shutdown
+        run: python home-assistant/container_smoke.py epexpredictor-ha:test

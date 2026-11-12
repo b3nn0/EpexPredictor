@@ -1,3 +1,8 @@
+# 0.2.2
+
+- Use the Home Assistant Debian base image and its S6 startup system.
+- Support aarch64 alongside amd64.
+
 # 0.2.1
 
 - Use upstream's merged Energy-Charts rate-limit fix and remove the temporary build-time patch.
