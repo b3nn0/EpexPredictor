@@ -3,6 +3,7 @@
 import asyncio
 from datetime import datetime, timezone
 import json
+import logging
 from pathlib import Path
 import shutil
 import sys
@@ -71,6 +72,7 @@ async def check(config_dir):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     with TemporaryDirectory() as temp:
         config_dir = Path(temp)
         source = Path(__file__).resolve().parents[2] / "custom_components"
