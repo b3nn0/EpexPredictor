@@ -7,7 +7,7 @@ from aiohttp import ClientConnectionError
 import pytest
 
 pytest.importorskip("homeassistant")
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from homeassistant import config_entries
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.service_info.hassio import HassioServiceInfo
@@ -124,6 +124,27 @@ async def test_polling_uses_effective_url(hass, url, minutes):
     entry = MockConfigEntry(domain="epexpredictor", data=CONFIG, options={"url": url})
     entry.add_to_hass(hass)
     assert ForecastCoordinator(hass, entry).update_interval == timedelta(minutes=minutes)
+
+
+@pytest.mark.asyncio
+async def test_quarter_hour_updates_state_without_http_request(hass, freezer):
+    start = datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc)
+    boundary = start + timedelta(minutes=15)
+    freezer.move_to(boundary - timedelta(seconds=1))
+    data = {"s": [int(start.timestamp()), int(boundary.timestamp())], "t": [-0.04, 0.12]}
+    with patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=data) as fetch:
+        entry = MockConfigEntry(domain="epexpredictor", data=CONFIG)
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        entity_id = er.async_get(hass).async_get_entity_id("sensor", "epexpredictor", f"{entry.entry_id}_prediction")
+        assert hass.states.get(entity_id).state == "-0.04"
+        requests = fetch.call_count
+        freezer.move_to(boundary)
+        async_fire_time_changed(hass, boundary)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert hass.states.get(entity_id).state == "0.12"
+        assert fetch.call_count == requests
 
 
 @pytest.mark.parametrize("data", [{}, {"s": [1, 2], "t": [1]}, {"s": [2, 1], "t": [1, 2]}, {"s": [1], "t": [float("nan")]}, {"s": [1], "t": [True]}])
