@@ -174,4 +174,7 @@ def mocked_predictor(
     predictor.pricestore.get_data = AsyncMock(return_value=sample_price_data)
     predictor.auxstore.get_data = AsyncMock(return_value=sample_aux_data)
     predictor.entsoestore.get_data = AsyncMock(return_value=sample_entsoe_data)
+    predictor.gasstore.get_data = AsyncMock(
+        return_value=pd.DataFrame({"gasprice": 30.0}, index=sample_weather_data.index)
+    )
     return predictor
