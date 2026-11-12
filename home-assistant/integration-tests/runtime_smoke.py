@@ -17,6 +17,7 @@ from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.db_schema import StateAttributes, States, StatesMeta
 from homeassistant.components.recorder.util import session_scope
 from homeassistant.helpers import entity_registry as er
+from homeassistant.setup import async_setup_component
 from sqlalchemy import select
 
 
@@ -36,7 +37,9 @@ async def check(config_dir):
     feed = {"s": [stamp, stamp + 900], "t": [-0.04, 0.12]}
     try:
         loader.async_setup(hass)
-        await async_from_config_dict({"recorder": {"db_url": "sqlite://", "auto_purge": False}}, hass)
+        config = {"recorder": {"db_url": "sqlite://", "auto_purge": False}}
+        await async_from_config_dict({}, hass)
+        assert await async_setup_component(hass, "recorder", config)
         await hass.async_start()
         with patch("custom_components.epexpredictor.config_flow.fetch", new_callable=AsyncMock, return_value=feed), patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=feed) as fetch:
             flow = hass.config_entries.flow
