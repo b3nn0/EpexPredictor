@@ -132,7 +132,9 @@ Without Entso-E API access
 # Home Assistant App and Integration
 
 Run the forecast server locally using the Home Assistant App. Requires
-Home Assistant OS on a supported **amd64** system.
+Home Assistant OS on a supported system.
+
+[![Add App repository](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fb3nn0%2FEpexPredictor)
 
 1. Open **Settings → Apps → App store** in Home Assistant.
 2. Open the menu and select **Repositories**.
@@ -154,7 +156,8 @@ Manual development installation is described separately in the
 The optional [EpexPredictor integration](custom_components/epexpredictor/README.md)
 provides UI-based setup. Install it separately; adding the App repository does not
 install the integration. See its [README](custom_components/epexpredictor/README.md)
-for HACS and manual installation instructions.
+for Marketplace and manual installation instructions. For **Local App** setup,
+install and start the App before configuring the integration.
 
 ### Manual Configuration:
 ```yaml
@@ -187,6 +190,12 @@ sensor:
 ```
 
 ### Display, e.g. via Plotly Graph Card:
+
+Install Plotly Graph Card from the Marketplace. Set `entity` below to your
+integration's **Price prediction** entity ID (find it under **Settings → Devices
+& services → EpexPredictor**). The example ID is for the manual REST sensor above;
+both sensors provide the same `s` and `t` forecast attributes.
+
 ```yaml
 type: custom:plotly-graph
 time_offset: 26h

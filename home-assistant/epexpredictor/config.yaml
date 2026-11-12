@@ -2,7 +2,7 @@ name: EpexPredictor
 version: "0.2.1"
 slug: epexpredictor
 description: Run the upstream electricity price forecast server locally
-url: https://github.com/Elmardus/EpexPredictor
+url: https://github.com/b3nn0/EpexPredictor
 arch:
   - amd64
 startup: application

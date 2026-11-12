@@ -5,11 +5,14 @@ Connect to the local App, the public server, or another self-hosted EpexPredicto
 
 ## Installation
 
-### HACS
+### Marketplace
 
-Open **HACS → Custom repositories**, add this repository's GitHub
-URL with type **Integration**, and download **EpexPredictor**. Restart Home
-Assistant, then follow the setup steps below.
+[![Open in Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=b3nn0&repository=EpexPredictor&category=integration)
+
+Open **Settings → Marketplace → Add from link**, add
+`https://github.com/b3nn0/EpexPredictor`, and install **EpexPredictor**. Restart
+Home Assistant, then follow the setup steps below. Marketplace requires
+Home Assistant 2026.11 or later; manual installation is also available below.
 
 ### Manual installation
 
@@ -18,6 +21,11 @@ containing the integration into `<HA configuration directory>/custom_components/
 Restart Home Assistant, then follow the setup steps below.
 
 ## Setup
+
+For **Local App** setup, [install and start the App](../../README.md#home-assistant-app-and-integration)
+first. The integration can also use a public or custom server without the App.
+
+[![Add integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=epexpredictor)
 
 After installing the custom integration and restarting Home Assistant, open
 **Settings → Devices & services → Add integration → EpexPredictor**.
@@ -49,3 +57,8 @@ To follow another region, add another EpexPredictor integration entry.
 
 Forecasts and the current price update automatically. If the server cannot be
 reached, the sensors show **Unavailable** until the connection recovers.
+
+## Forecast graph
+
+See the [Plotly Graph Card example](../../README.md#display-eg-via-plotly-graph-card)
+in the main README. Replace its entity ID with your **Price prediction** entity.

@@ -24,7 +24,7 @@ App. For a development install, copy that directory into the Home Assistant
 configuration directory's `custom_components` folder, then restart HA. The App
 must also include discovery support to test its discovered setup flow.
 
-HACS installs the integration separately from the App store. Both packages live
+The Marketplace installs the integration separately from the App store. Both packages live
 in this repository; installing either one does not install the other.
 
 Its dedicated workflow runs the full config-flow and entity suite on the minimum
