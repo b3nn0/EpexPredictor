@@ -24,6 +24,8 @@ Restart Home Assistant, then follow the setup steps below.
 
 For **Local App** setup, [install and start the App](../../README.md#home-assistant-app-and-integration)
 first. The integration can also use a public or custom server without the App.
+Wait for the App's initial data download and training to finish before choosing
+**Local App**.
 
 [![Add integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=epexpredictor)
 
