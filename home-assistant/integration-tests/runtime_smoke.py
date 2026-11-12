@@ -40,7 +40,7 @@ async def check(config_dir):
         config = {"recorder": {"db_url": f"sqlite:///{config_dir / 'history.db'}", "auto_purge": False}}
         # Bootstrap Recorder with its database resources, without unrelated
         # default integrations that need additional optional dependencies.
-        with patch("homeassistant.bootstrap.DEFAULT_INTEGRATIONS", set()):
+        with patch("homeassistant.bootstrap.DEFAULT_INTEGRATIONS", {"network"}):
             assert await async_from_config_dict(config, hass) is hass
         await hass.async_start()
         with patch("custom_components.epexpredictor.config_flow.fetch", new_callable=AsyncMock, return_value=feed), patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=feed) as fetch:
