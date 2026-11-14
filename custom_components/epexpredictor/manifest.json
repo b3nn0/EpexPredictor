@@ -1,6 +1,7 @@
 {
   "domain": "epexpredictor",
   "name": "EpexPredictor",
+  "categories": [ "energy.energy_prices" ],
   "after_dependencies": ["hassio"],
   "codeowners": ["@b3nn0"],
   "config_flow": true,
