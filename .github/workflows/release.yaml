@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release_zip_file:
+    name: Prepare release asset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Update version in manifest.json and const.py from current git tag
+        run: |
+          sed -i "s/0\\.0\\.0\\.dev0/${GITHUB_REF_NAME}/g" custom_components/epexpredictor/manifest.json
+
+      - name: Pack Zip
+        run: |
+          cd ${{ github.workspace }}/custom_components/epexpredictor
+          zip epexpredictor.zip -r ./
+
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          files: ${{ github.workspace }}/custom_components/epexpredictor/epexpredictor.zip
+          
+

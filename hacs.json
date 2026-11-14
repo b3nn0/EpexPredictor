@@ -1,1 +1,6 @@
-{"name": "EpexPredictor", "homeassistant": "2026.10.0"}
+{
+    "name": "EpexPredictor",
+    "homeassistant": "2026.10.0",
+    "zip_release": true,
+    "filename": "epexpredictor.zip"
+}
