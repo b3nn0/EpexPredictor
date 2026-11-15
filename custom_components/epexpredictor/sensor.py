@@ -1,5 +1,7 @@
 """Forecast entities with compact timestamp/price attributes."""
 
+from datetime import datetime
+
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
@@ -11,12 +13,12 @@ from .const import DOMAIN
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    async_add_entities([ForecastSensor(entry, key) for key in ("prediction", "evaluation", "fetched")])
+    async_add_entities([ForecastSensor(entry, key) for key in ("prediction", "fetched")])
 
 
 class ForecastSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
-    _unrecorded_attributes = frozenset({"s", "t"})
+    _unrecorded_attributes = frozenset({"prices"})
 
     def __init__(self, entry, key):
         super().__init__(entry.runtime_data, context=key)
@@ -33,14 +35,11 @@ class ForecastSensor(CoordinatorEntity, SensorEntity):
         else:
             self._attr_native_unit_of_measurement = "EUR/kWh"
             self._attr_icon = "mdi:chart-line"
-        self._attr_entity_registry_enabled_default = key != "evaluation"
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         if self.key != "fetched":
             self.async_on_remove(async_track_time_change(self.hass, self._async_update_current_price, minute=[0, 15, 30, 45], second=0))
-        if self.key == "evaluation":
-            await self.coordinator.async_request_refresh()
 
     @callback
     def _async_update_current_price(self, now):
@@ -55,10 +54,14 @@ class ForecastSensor(CoordinatorEntity, SensorEntity):
         value = self.coordinator.data.get(self.key)
         if self.key == "fetched" or value is None:
             return value
-        now = dt_util.utcnow().timestamp()
-        index = max((i for i, stamp in enumerate(value["s"]) if stamp <= now), default=0)
-        return value["t"][index]
+        prices = value["prices"]
+        now = dt_util.utcnow()
+        index = max((i for i, price in enumerate(prices) if datetime.fromisoformat(price["startsAt"]) <= now), default=0)
+        return prices[index]["total"]
 
     @property
     def extra_state_attributes(self):
-        return self.coordinator.data.get(self.key) if self.key != "fetched" else None
+        value = self.coordinator.data.get(self.key)
+        if value is None or self.key == "fetched":
+            return None
+        return {"prices": value["prices"], "knownUntil": value.get("knownUntil")}

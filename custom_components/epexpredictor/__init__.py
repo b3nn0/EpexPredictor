@@ -28,13 +28,7 @@ class ForecastCoordinator(DataUpdateCoordinator):
             prediction = await fetch(self.session, self.config)
         except (ClientError, TimeoutError, ValueError) as error:
             raise UpdateFailed(f"Unable to fetch forecast: {error}") from error
-        evaluation = None
-        if "evaluation" in self.async_contexts():
-            try:
-                evaluation = await fetch(self.session, self.config, evaluation=True)
-            except (ClientError, TimeoutError, ValueError) as error:
-                LOGGER.warning("Unable to fetch evaluation forecast: %s", error)
-        return {"prediction": prediction, "evaluation": evaluation, "fetched": dt_util.utcnow()}
+        return {"prediction": prediction, "fetched": dt_util.utcnow()}
 
 
 async def async_setup_entry(hass, entry):

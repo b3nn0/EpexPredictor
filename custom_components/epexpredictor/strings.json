@@ -69,9 +69,6 @@
       "prediction": {
         "name": "Price prediction"
       },
-      "evaluation": {
-        "name": "Price prediction evaluation"
-      },
       "fetched": {
         "name": "Forecast fetched"
       }

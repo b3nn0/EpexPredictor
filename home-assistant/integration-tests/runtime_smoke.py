@@ -1,7 +1,7 @@
 """Check the integration in HA without depending on version-specific test fixtures."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 from pathlib import Path
@@ -33,8 +33,9 @@ def recorded_forecasts(hass, entity_id):
 
 async def check(config_dir):
     hass = HomeAssistant(str(config_dir))
-    stamp = int(datetime.now(timezone.utc).timestamp()) // 900 * 900
-    feed = {"s": [stamp, stamp + 900], "t": [-0.04, 0.12]}
+    now = datetime.now(timezone.utc)
+    start = now.replace(second=0, microsecond=0, minute=now.minute // 15 * 15)
+    feed = {"prices": [{"startsAt": start.isoformat(), "total": -0.04}, {"startsAt": (start + timedelta(minutes=15)).isoformat(), "total": 0.12}], "knownUntil": start.isoformat()}
     try:
         loader.async_setup(hass)
         config = {"recorder": {"db_url": f"sqlite:///{config_dir / 'history.db'}", "auto_purge": False}}
@@ -43,7 +44,7 @@ async def check(config_dir):
         with patch("homeassistant.bootstrap.DEFAULT_INTEGRATIONS", {"network"}):
             assert await async_from_config_dict(config, hass) is hass
         await hass.async_start()
-        with patch("custom_components.epexpredictor.config_flow.fetch", new_callable=AsyncMock, return_value=feed), patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=feed) as fetch:
+        with patch("custom_components.epexpredictor.config_flow.fetch", new_callable=AsyncMock, return_value=feed), patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=feed):
             flow = hass.config_entries.flow
             result = await flow.async_init("epexpredictor", context={"source": "user"})
             result = await flow.async_configure(result["flow_id"], {"source": "custom"})
@@ -55,19 +56,16 @@ async def check(config_dir):
             registry = er.async_get(hass)
             entity_id = registry.async_get_entity_id("sensor", "epexpredictor", f"{entry.entry_id}_prediction")
             assert hass.states.get(entity_id).state == "-0.04"
-            assert hass.states.get(entity_id).attributes["t"] == feed["t"]
-            evaluation_id = registry.async_get_entity_id("sensor", "epexpredictor", f"{entry.entry_id}_evaluation")
-            assert registry.async_get(evaluation_id).disabled_by == er.RegistryEntryDisabler.INTEGRATION
-            assert all(not call.kwargs.get("evaluation") for call in fetch.call_args_list)
+            assert hass.states.get(entity_id).attributes["prices"] == feed["prices"]
             await get_instance(hass).async_block_till_done()
             rows = await hass.async_add_executor_job(recorded_forecasts, hass, entity_id)
             assert rows, "Forecast state must still be recorded"
             assert any(state == "-0.04" for state, _ in rows)
             for _, attributes in rows:
                 attributes = json.loads(attributes)
-                assert "s" not in attributes and "t" not in attributes
+                assert "prices" not in attributes
             assert await hass.config_entries.async_unload(entry.entry_id)
-            print("Runtime smoke passed: UI setup, live forecast, Recorder exclusion, disabled evaluation, unload")
+            print("Runtime smoke passed: UI setup, live forecast, Recorder exclusion, unload")
     finally:
         await hass.async_stop(force=True)
 

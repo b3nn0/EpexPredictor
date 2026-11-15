@@ -1,29 +1,38 @@
 """Small HTTP client for the existing compact forecast API."""
 
 import asyncio
+from datetime import datetime
 from math import isfinite
 
 
 def validate_forecast(data):
-    if not isinstance(data, dict):
-        raise ValueError("Expected a forecast object")
-    stamps, prices = data.get("s"), data.get("t")
-    if not isinstance(stamps, list) or not isinstance(prices, list) or not stamps or len(stamps) != len(prices):
-        raise ValueError("Expected equally sized, nonempty timestamp and price arrays")
-    if any(type(v) not in (int, float) or not isfinite(v) for v in stamps + prices):
-        raise ValueError("Forecast contains nonnumeric or nonfinite values")
-    if any(v <= 0 for v in stamps) or any(b <= a for a, b in zip(stamps, stamps[1:])):
-        raise ValueError("Forecast timestamps must be positive and strictly increasing")
-    return {"s": stamps, "t": prices}
+    if not isinstance(data, dict) or not isinstance(data.get("prices"), list) or not data["prices"]:
+        raise ValueError("Expected a nonempty prices array")
+    previous = None
+    for item in data["prices"]:
+        if not isinstance(item, dict):
+            raise ValueError("Expected price objects with startsAt and total")
+        try:
+            starts_at = datetime.fromisoformat(item["startsAt"])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("Price objects must carry an ISO startsAt timestamp")
+        total = item.get("total")
+        if type(total) not in (int, float) or not isfinite(total):
+            raise ValueError("Forecast contains nonnumeric or nonfinite values")
+        if starts_at.tzinfo is None:
+            raise ValueError("Price timestamps must be timezone-aware")
+        if previous is not None and starts_at <= previous:
+            raise ValueError("Forecast timestamps must be strictly increasing")
+        previous = starts_at
+    return data
 
 
-async def fetch(session, config, evaluation=False):
+async def fetch(session, config):
     params = {
         "region": config["region"], "surcharge": config["surcharge"],
         "taxPercent": config["tax_percent"], "unit": "EUR_PER_KWH", "hours": 120,
-        "evaluation": str(evaluation).lower(),
     }
     async with asyncio.timeout(60):
-        async with session.get(config["url"] + "/prices_short", params=params) as response:
+        async with session.get(config["url"] + "/prices", params=params) as response:
             response.raise_for_status()
             return validate_forecast(await response.json())

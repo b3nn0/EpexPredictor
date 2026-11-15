@@ -53,9 +53,6 @@ To follow another region, add another EpexPredictor integration entry.
   available and predictions for future periods. Also includes upcoming prices
   for displaying in a forecast graph.
 - **Forecast fetched:** when Home Assistant last successfully retrieved the forecast.
-- **Price prediction evaluation:** the model's predicted prices, including periods
-  with published prices, so you can compare predictions with actual market prices.
-  Disabled by default; enable it from the device's entity list when needed.
 
 Forecasts refresh every 15 minutes from the public server and every 5 minutes
 from other servers. The current price advances automatically each quarter-hour.
