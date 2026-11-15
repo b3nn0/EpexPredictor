@@ -1,7 +1,9 @@
 """UI setup, Supervisor discovery, and editable per-region pricing settings."""
 
+from typing import Any
+
 from aiohttp import ClientError
-import voluptuous as vol
+import probatio as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -12,7 +14,7 @@ from .const import DEFAULTS, DOMAIN, PUBLIC_URL, REGIONS, normalize_url, setting
 
 
 def schema(defaults, include_url=False):
-    fields = {vol.Required("url", default=defaults.get("url", "")): str} if include_url else {}
+    fields: dict[vol.Required, Any] = {vol.Required("url", default=defaults.get("url", "")): str} if include_url else {}
     fields.update({
         vol.Required("region", default=defaults.get("region", "DE")): SelectSelector(SelectSelectorConfig(options=REGIONS)),
         vol.Required("surcharge", default=defaults.get("surcharge", 0.0)): vol.Coerce(float),

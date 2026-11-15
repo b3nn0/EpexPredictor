@@ -17,7 +17,7 @@ def validate_forecast(data):
         except (KeyError, TypeError, ValueError):
             raise ValueError("Price objects must carry an ISO startsAt timestamp")
         total = item.get("total")
-        if type(total) not in (int, float) or not isfinite(total):
+        if not isinstance(total, (int, float)) or isinstance(total, bool) or not isfinite(total):
             raise ValueError("Forecast contains nonnumeric or nonfinite values")
         if starts_at.tzinfo is None:
             raise ValueError("Price timestamps must be timezone-aware")

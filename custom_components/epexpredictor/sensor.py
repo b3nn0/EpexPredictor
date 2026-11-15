@@ -9,6 +9,7 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from . import ForecastCoordinator
 from .const import DOMAIN
 
 
@@ -19,6 +20,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class ForecastSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _unrecorded_attributes = frozenset({"prices"})
+    coordinator: ForecastCoordinator
 
     def __init__(self, entry, key):
         super().__init__(entry.runtime_data, context=key)
