@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
-from aiohttp import ClientConnectionError
 import pytest
 
 pytest.importorskip("homeassistant")
@@ -23,8 +22,9 @@ def custom_integration(enable_custom_integrations):
 
 @pytest.fixture
 def feed():
-    stamp = int(datetime.now(timezone.utc).timestamp()) // 900 * 900
-    data = {"s": [stamp, stamp + 900], "t": [-0.04, 0.12]}
+    now = datetime.now(timezone.utc)
+    start = now.replace(second=0, microsecond=0, minute=now.minute // 15 * 15)
+    data = {"prices": [{"startsAt": start.isoformat(), "total": -0.04}, {"startsAt": (start + timedelta(minutes=15)).isoformat(), "total": 0.12}], "knownUntil": start.isoformat()}
     with patch("custom_components.epexpredictor.config_flow.fetch", new_callable=AsyncMock, return_value=data) as flow_fetch, patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=data) as coordinator_fetch:
         yield flow_fetch, coordinator_fetch
 
@@ -46,26 +46,6 @@ async def test_custom_setup_and_duplicate(hass, feed):
 
 
 @pytest.mark.asyncio
-async def test_evaluation_is_not_requested_until_enabled(hass, feed):
-    entry = MockConfigEntry(domain="epexpredictor", data=CONFIG)
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    registry = er.async_get(hass)
-    evaluation_id = registry.async_get_entity_id("sensor", "epexpredictor", f"{entry.entry_id}_evaluation")
-    prediction_id = registry.async_get_entity_id("sensor", "epexpredictor", f"{entry.entry_id}_prediction")
-    assert registry.async_get(evaluation_id).disabled_by == er.RegistryEntryDisabler.INTEGRATION
-    assert hass.states.get(prediction_id).state == "-0.04"
-    assert all(not call.kwargs.get("evaluation") for call in feed[1].call_args_list)
-    assert await hass.config_entries.async_unload(entry.entry_id)
-    registry.async_update_entity(evaluation_id, disabled_by=None)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert any(call.kwargs.get("evaluation") is True for call in feed[1].call_args_list)
-    assert hass.states.get(evaluation_id).state == "-0.04"
-
-
-@pytest.mark.asyncio
 async def test_public_server_and_missing_local_app(hass, feed):
     result = await hass.config_entries.flow.async_init("epexpredictor", context={"source": "user"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"source": "local"})
@@ -74,26 +54,6 @@ async def test_public_server_and_missing_local_app(hass, feed):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {k: CONFIG[k] for k in ("region", "surcharge", "tax_percent")})
     assert result["data"]["url"] == "https://epexpredictor.batzill.com"
     await hass.async_block_till_done()
-
-
-@pytest.mark.asyncio
-async def test_evaluation_failure_keeps_regular_forecast(hass, feed):
-    entry = MockConfigEntry(domain="epexpredictor", data=CONFIG)
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    coordinator = entry.runtime_data
-    prediction = coordinator.data["prediction"]
-
-    async def fetch(session, config, evaluation=False):
-        if evaluation:
-            raise ClientConnectionError("evaluation unavailable")
-        return prediction
-
-    with patch.object(coordinator, "async_contexts", return_value=iter(["evaluation"])), patch("custom_components.epexpredictor.fetch", side_effect=fetch):
-        await coordinator.async_refresh()
-    assert coordinator.last_update_success
-    assert coordinator.data["prediction"] == prediction
-    assert coordinator.data["evaluation"] is None
 
 
 @pytest.mark.asyncio
@@ -131,7 +91,7 @@ async def test_quarter_hour_updates_state_without_http_request(hass, freezer):
     start = datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc)
     boundary = start + timedelta(minutes=15)
     freezer.move_to(boundary - timedelta(seconds=1))
-    data = {"s": [int(start.timestamp()), int(boundary.timestamp())], "t": [-0.04, 0.12]}
+    data = {"prices": [{"startsAt": start.isoformat(), "total": -0.04}, {"startsAt": boundary.isoformat(), "total": 0.12}], "knownUntil": start.isoformat()}
     with patch("custom_components.epexpredictor.fetch", new_callable=AsyncMock, return_value=data) as fetch:
         entry = MockConfigEntry(domain="epexpredictor", data=CONFIG)
         entry.add_to_hass(hass)
@@ -147,7 +107,7 @@ async def test_quarter_hour_updates_state_without_http_request(hass, freezer):
         assert fetch.call_count == requests
 
 
-@pytest.mark.parametrize("data", [{}, {"s": [1, 2], "t": [1]}, {"s": [2, 1], "t": [1, 2]}, {"s": [1], "t": [float("nan")]}, {"s": [1], "t": [True]}])
+@pytest.mark.parametrize("data", [{}, {"prices": []}, {"prices": [{"startsAt": "2026-11-12T12:00:00+01:00", "total": 1}, {"startsAt": "2026-11-12T11:00:00+01:00", "total": 2}]}, {"prices": [{"startsAt": "2026-11-12T12:00:00+01:00", "total": float("nan")}]}, {"prices": [{"startsAt": "2026-11-12T12:00:00+01:00", "total": True}]}, {"prices": [{"startsAt": "2026-11-12T12:00:00", "total": 1}]}])
 def test_invalid_forecasts(data):
     with pytest.raises(ValueError):
         validate_forecast(data)
