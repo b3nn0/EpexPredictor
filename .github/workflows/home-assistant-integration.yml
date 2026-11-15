@@ -24,7 +24,7 @@ jobs:
       - if: matrix.homeassistant == '2026.10.0'
         run: pip install homeassistant==${{ matrix.homeassistant }} 'pytest-homeassistant-custom-component>=0.13'
       - if: matrix.homeassistant == '2026.10.0'
-        run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q -o asyncio_mode=auto
+        run: python -m pytest --confcutdir=home-assistant/integration-tests home-assistant/integration-tests -q -o asyncio_mode=auto -p homeassistant
       # The published fixture package does not yet support HA 2026.11.
       # Exercise real setup/entities/unload without that package on both versions.
       - if: matrix.homeassistant != '2026.10.0'

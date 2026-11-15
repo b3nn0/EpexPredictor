@@ -1,6 +1,5 @@
 """Shared pytest fixtures for EpexPredictor tests."""
 
-import asyncio
 import tempfile
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
@@ -9,14 +8,6 @@ import pandas as pd
 import pytest
 
 from predictor.model.priceregion import PriceRegionName
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture
