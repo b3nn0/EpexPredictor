@@ -1,6 +1,4 @@
 import asyncio
-from functools import wraps
-from time import monotonic
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -23,21 +21,9 @@ class PriceStore(DataStore):
     Fetches and caches price info from api.energy-charts.info
     """
 
-    # Energy-Charts /price allows two requests/minute, shared by all regions.
+    # Energy-Charts rate-limits per IP, shared by all regions. Serialize requests
+    # and retry on HTTP 429 honoring the Retry-After header.
     _energycharts_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
-    _energycharts_next_request: ClassVar[float] = 0.0
-
-    @staticmethod
-    def _limit_energycharts(function):
-        @wraps(function)
-        async def limited(*args, **kwargs):
-            async with PriceStore._energycharts_lock:
-                delay = PriceStore._energycharts_next_request - monotonic()
-                if delay > 0:
-                    await asyncio.sleep(delay)
-                PriceStore._energycharts_next_request = monotonic() + 31
-                return await function(*args, **kwargs)
-        return limited
 
     data: pd.DataFrame
     region: PriceRegion
@@ -108,11 +94,13 @@ class PriceStore(DataStore):
 
     async def fetch_missing_data(self, start: datetime, end: datetime) -> bool:
         """
-        Fetch missing price data from energy-charts.info or ENTSO-E.
-        
-        This method attempts to fetch price data from energy-charts.info first.
-        If energy-charts returns data but no update is necessary (i.e., _update_data returns False),
-        it will fall back to ENTSO-E to ensure we have the most recent data available.
+        Fetch missing price data from Nord Pool, energy-charts.info or ENTSO-E.
+
+        For short gaps (<= 3 days) with Nord Pool enabled, Nord Pool is queried
+        first; otherwise energy-charts is preferred and the others act as fallback.
+
+        Ranges are clamped to the start of the day after tomorrow (local time):
+        no day-ahead source publishes beyond tomorrow.
         
         Args:
             start: Start date/time for the data range
@@ -125,18 +113,44 @@ class PriceStore(DataStore):
             start = start.astimezone(timezone.utc)
             end = end.astimezone(timezone.utc)
 
+            # Day-ahead sources publish at most today+tomorrow. Callers request a
+            # week ahead for training; don't turn that into a week-wide API query.
+            tzlocal = self.region.get_timezone_info()
+            fetch_limit = (datetime.now(tz=tzlocal) + timedelta(days=2)).replace(
+                hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+
             updated = False
             checked = False
 
             for rstart, rend in self.gen_missing_date_ranges(start, end):
+                rend = min(rend, fetch_limit)
+                if rstart > rend:
+                    continue
                 checked = True
-                updated |= await self._fetch_and_update_from_energycharts(rstart, rend)
-                if not updated:
-                    # If energy-charts didn't update anything, try ENTSO-E as fallback
-                    updated |= await self._fetch_and_update_from_entsoe(rstart, rend)
-                if not updated:
-                    # Nord Pool is lowest priority (only used if explicitly enabled)
-                    updated |= await self._fetch_and_update_from_nordpool(rstart, rend)
+                # Nord Pool needs one query per day, but delivers prices earlier than the others.
+                # Only prefer querying it for short time ranges (day to day use)
+                # not for initial bulk fetch
+                nordpool_first = (
+                    self.use_nordpool
+                    and self.region.bidding_zone_nordpool is not None
+                    and (rend - rstart) <= timedelta(days=3)
+                )
+                if nordpool_first:
+                    sources = (
+                        self._fetch_and_update_from_nordpool,
+                        self._fetch_and_update_from_energycharts,
+                        self._fetch_and_update_from_entsoe,
+                    )
+                else:
+                    sources = (
+                        self._fetch_and_update_from_energycharts,
+                        self._fetch_and_update_from_entsoe,
+                        self._fetch_and_update_from_nordpool,
+                    )
+                for fetch in sources:
+                    if updated:
+                        break
+                    updated |= await fetch(rstart, rend)
 
         
             if updated:
@@ -185,7 +199,6 @@ class PriceStore(DataStore):
         return bool((last_24h["price"] == 0).all())
 
     
-    @_limit_energycharts
     async def fetch_prices_energycharts(self, rstart: datetime, rend: datetime) -> pd.DataFrame | None:
         try:
             if self.region.bidding_zone_energycharts is not None:
@@ -198,13 +211,24 @@ class PriceStore(DataStore):
                 end_formatted = end_of_day.isoformat().replace("+00:00", "Z")
                 url = f"https://api.energy-charts.info/price?bzn={self.region.bidding_zone_energycharts}&start={start_formatted}&end={end_formatted}"
                 log.info(f"{self.region.bidding_zone_entsoe}: fetching price data: {url}")
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=60)) as resp:
-                        resp.raise_for_status()
-                        txt = await resp.text()
+                async with PriceStore._energycharts_lock:
+                    async with aiohttp.ClientSession() as session:
+                        for _attempt in range(4):
+                            async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=60)) as resp:
+                                if resp.status == 429:
+                                    retry_after = int(resp.headers.get("Retry-After", "30"))
+                                    log.info(f"{self.region.bidding_zone_entsoe}: energy-charts rate limited, retrying in {retry_after}s")
+                                    await asyncio.sleep(retry_after)
+                                    continue
+                                resp.raise_for_status()
+                                txt = await resp.text()
+                                break
+                        if resp.status == 429:
+                            log.error(f"{self.region.bidding_zone_entsoe}: energy-charts still rate limited after retries")
+                            return None
                         if "no content available" in txt:
                             return None
-                        
+
                         data = json.loads(txt)
                         timestamps = data["unix_seconds"]
                         prices = data["price"]

@@ -16,26 +16,25 @@ from predictor.model.priceregion import PriceRegionName
 
 
 @pytest.fixture(autouse=True)
-def energycharts_clock(monkeypatch):
-    """Isolate the shared limiter and advance a fake clock instead of waiting."""
-    clock = {"now": 100.0, "waits": []}
+def energycharts_lock(monkeypatch):
+    """Isolate the shared lock and record Retry-After sleeps instead of waiting."""
+    sleeps = []
     yield_to_loop = asyncio.sleep
 
     async def sleep(delay):
-        clock["waits"].append(delay)
-        clock["now"] += delay
+        sleeps.append(delay)
         await yield_to_loop(0)
 
     monkeypatch.setattr(PriceStore, "_energycharts_lock", asyncio.Lock())
-    monkeypatch.setattr(PriceStore, "_energycharts_next_request", 0.0)
-    monkeypatch.setattr(pricestore, "monotonic", lambda: clock["now"])
     monkeypatch.setattr(pricestore.asyncio, "sleep", sleep)
-    return clock
+    return sleeps
 
 
 @pytest.fixture
 def energycharts_response():
     response = AsyncMock()
+    response.status = 200
+    response.headers = {}
     response.raise_for_status = MagicMock()
     response.text.return_value = json.dumps({"unix_seconds": [1730419200], "price": [80.5]})
     with patch("predictor.model.pricestore.aiohttp.ClientSession") as session:
@@ -47,35 +46,54 @@ def energycharts_response():
 
 class TestEnergyChartsRequests:
     @pytest.mark.asyncio
-    async def test_regions_share_limiter_and_first_request_is_immediate(self, energycharts_clock, energycharts_response):
+    async def test_requests_are_serialized_without_initial_delay(self, energycharts_lock, energycharts_response):
         client, _ = energycharts_response
-        starts = []
-        context = client.get.return_value
-
-        def request(*args, **kwargs):
-            starts.append(energycharts_clock["now"])
-            return context
-
-        client.get.side_effect = request
         start = datetime(2024, 11, 1, tzinfo=timezone.utc)
         stores = [PriceStore(region.to_region()) for region in (PriceRegionName.DE, PriceRegionName.NL)]
         results = await asyncio.gather(*(store.fetch_prices_energycharts(start, start) for store in stores))
-        assert starts == [100.0, 131.0]
-        assert energycharts_clock["waits"] == [31.0]
+        assert energycharts_lock == []
         assert all(result is not None for result in results)
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("status", [429, 503])
-    async def test_http_error_is_reported_before_parsing_and_next_request_can_run(self, status, sample_region, energycharts_response, caplog):
+    async def test_429_retries_after_retry_after_header(self, energycharts_lock, sample_region, energycharts_response, caplog):
         _, response = energycharts_response
+        response.status = 429
+        response.headers = {"Retry-After": "7"}
+        store = PriceStore(sample_region)
+        start = datetime(2024, 11, 1, tzinfo=timezone.utc)
+        assert await store.fetch_prices_energycharts(start, start) is None
+        assert energycharts_lock == [7, 7, 7, 7]
+        assert "rate limited" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_429_recovers_when_rate_limit_clears(self, energycharts_lock, sample_region, energycharts_response):
+        client, response = energycharts_response
+        # Clear the rate limit on the second attempt.
+        statuses = iter([(429, {"Retry-After": "5"}), (200, {})])
+
+        def aenter():
+            response.status, response.headers = next(statuses)
+            return response
+
+        client.get.return_value.__aenter__.side_effect = aenter
+        store = PriceStore(sample_region)
+        start = datetime(2024, 11, 1, tzinfo=timezone.utc)
+        result = await store.fetch_prices_energycharts(start, start)
+        assert result is not None
+        assert energycharts_lock == [5]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", [503, 500])
+    async def test_http_error_is_reported_before_parsing(self, status, sample_region, energycharts_response, caplog):
+        _, response = energycharts_response
+        response.status = status
         error = aiohttp.ClientResponseError(MagicMock(real_url="https://api.energy-charts.info/price"), (), status=status)
-        response.raise_for_status.side_effect = [error, None]
+        response.raise_for_status.side_effect = error
         store = PriceStore(sample_region)
         start = datetime(2024, 11, 1, tzinfo=timezone.utc)
         assert await store.fetch_prices_energycharts(start, start) is None
         response.text.assert_not_awaited()
         assert str(status) in caplog.text
-        assert await store.fetch_prices_energycharts(start, start) is not None
 
 
 class TestPriceStoreInit:
