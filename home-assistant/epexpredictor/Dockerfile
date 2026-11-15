@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/base-debian:trixie
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.2.2
+ARG BUILD_VERSION=v1.0.6
 ARG BUILD_ARCH=amd64
 # This is the unchanged upstream source reviewed for this App release.
 ARG UPSTREAM_REVISION=9c0c17c6eb6af297b1ba933af930c0acf3689ff9

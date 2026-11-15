@@ -1,3 +1,8 @@
+# v1.0.6
+- Sync up Backend/App/Integration versions
+- Improve energycharts API rate limiting behaviour
+- Prefer Nordpool for short range price fetches if enabled
+
 # 0.2.2
 
 - Use the Home Assistant Debian base image and its S6 startup system.
