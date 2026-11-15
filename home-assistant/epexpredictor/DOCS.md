@@ -52,7 +52,7 @@ http://<app-hostname>:8000/prices_short?region=DE&unit=EUR_PER_KWH
 | `timezone` | IANA timezone for output and interpreting timestamps without an offset. |
 | `startTs` | Optional starting timestamp. |
 | `hourly` | Return hourly averages. |
-| `evaluation` | Predict known periods as well, for model evaluation. |
+| `evaluation` | Deprecated: predict known periods as well, for model evaluation. Will be removed. |
 
 Consult `/docs` for current defaults and the complete API. Home Assistant's
 built-in REST integration can consume the compact format. Choose an appropriate

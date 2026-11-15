@@ -173,28 +173,14 @@ sensor:
     json_attributes:
       - s
       - t
-
-  # If you want to evaluate performance in real time, you can add another sensor like this
-  # and plot it in the same diagram as the actual prediction sensor
-
-  #- platform: rest
-  #  resource: "https://epexpredictor.batzill.com/prices_short?region=DE&surcharge=13.70084&taxPercent=19&evaluation=true&unit=EUR_PER_KWH&hours=120"
-  #  method: GET
-  #  unique_id: epex_price_prediction_evaluation
-  #  name: "EPEX Price Prediction Evaluation"
-  #  unit_of_measurement: €/kWh
-  #  value_template: "{{ value_json.t[0] }}"
-  #  json_attributes:
-  #    - s
-  #    - t
 ```
 
 ### Display, e.g. via Plotly Graph Card:
 
 Install Plotly Graph Card from the Marketplace. Set `entity` below to your
 integration's **Price prediction** entity ID (find it under **Settings → Devices
-& services → EpexPredictor**). The example ID is for the manual REST sensor above;
-both sensors provide the same `s` and `t` forecast attributes.
+& services → EpexPredictor**). The example ID is for the manual REST sensor above,
+which provides the same `s` and `t` forecast attributes.
 
 ```yaml
 type: custom:plotly-graph
