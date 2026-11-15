@@ -46,6 +46,17 @@ async def test_custom_setup_and_duplicate(hass, feed):
 
 
 @pytest.mark.asyncio
+async def test_stale_entry_without_url_does_not_break_flows(hass, feed):
+    stale = MockConfigEntry(domain="epexpredictor", data={"region": "DE"})
+    stale.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init("epexpredictor", context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"source": "custom"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"url": CONFIG["url"]})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {k: CONFIG[k] for k in ("region", "surcharge", "tax_percent")})
+    assert result["type"] == "create_entry"
+
+
+@pytest.mark.asyncio
 async def test_public_server_and_missing_local_app(hass, feed):
     result = await hass.config_entries.flow.async_init("epexpredictor", context={"source": "user"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"source": "local"})

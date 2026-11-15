@@ -25,7 +25,7 @@ async def validate(hass, config, exclude=None):
     config = config | {"url": normalize_url(config["url"])}
     for entry in hass.config_entries.async_entries(DOMAIN):
         existing = settings(entry)
-        if entry.entry_id != exclude and existing["url"] == config["url"] and existing["region"] == config["region"]:
+        if entry.entry_id != exclude and existing.get("url") == config["url"] and existing.get("region") == config["region"]:
             raise DuplicateProfile
     await fetch(async_get_clientsession(hass), config)
     return config
@@ -86,7 +86,7 @@ class EpexPredictorFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.url = normalize_url(discovery_info.config["url"])
         await self.async_set_unique_id(discovery_info.uuid)
         self._abort_if_unique_id_configured()
-        if any(settings(entry)["url"] == self.url for entry in self._async_current_entries()):
+        if any(settings(entry).get("url") == self.url for entry in self._async_current_entries()):
             return self.async_abort(reason="already_configured")
         self.context["title_placeholders"] = {"name": discovery_info.name}
         return await self.async_step_profile()
