@@ -1,15 +1,16 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/base-debian:trixie
 FROM ${BUILD_FROM}
 
+# This is the unchanged upstream source reviewed for this App release.
 ARG BUILD_VERSION=v1.0.6
 ARG BUILD_ARCH=amd64
-# This is the unchanged upstream source reviewed for this App release.
-ARG UPSTREAM_REVISION=9c0c17c6eb6af297b1ba933af930c0acf3689ff9
+
+
 LABEL io.hass.version="${BUILD_VERSION}" io.hass.type="addon" io.hass.arch="${BUILD_ARCH}"
 
 ENV PYTHONUNBUFFERED=1 EPEXPREDICTOR_DATADIR=/data PATH="/opt/venv/bin:${PATH}"
 WORKDIR /code
-ADD https://github.com/b3nn0/EpexPredictor/archive/${UPSTREAM_REVISION}.tar.gz /tmp/upstream.tar.gz
+ADD https://github.com/b3nn0/EpexPredictor/archive/refs/tags/${BUILD_VERSION}.tar.gz /tmp/upstream.tar.gz
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-venv libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
