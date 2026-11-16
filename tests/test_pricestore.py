@@ -62,7 +62,8 @@ class TestEnergyChartsRequests:
         store = PriceStore(sample_region)
         start = datetime(2024, 11, 1, tzinfo=timezone.utc)
         assert await store.fetch_prices_energycharts(start, start) is None
-        assert energycharts_lock == [7, 7, 7, 7]
+        # 2s grace period is added on top of the Retry-After value
+        assert energycharts_lock == [9, 9, 9, 9]
         assert "rate limited" in caplog.text
 
     @pytest.mark.asyncio
@@ -80,7 +81,8 @@ class TestEnergyChartsRequests:
         start = datetime(2024, 11, 1, tzinfo=timezone.utc)
         result = await store.fetch_prices_energycharts(start, start)
         assert result is not None
-        assert energycharts_lock == [5]
+        # 2s grace period is added on top of the Retry-After value
+        assert energycharts_lock == [7]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("status", [503, 500])
