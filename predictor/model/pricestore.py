@@ -216,7 +216,7 @@ class PriceStore(DataStore):
                         for _attempt in range(4):
                             async with session.get(url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=60)) as resp:
                                 if resp.status == 429:
-                                    retry_after = int(resp.headers.get("Retry-After", "30"))
+                                    retry_after = int(resp.headers.get("Retry-After", "30")) + 2
                                     log.info(f"{self.region.bidding_zone_entsoe}: energy-charts rate limited, retrying in {retry_after}s")
                                     await asyncio.sleep(retry_after)
                                     continue
